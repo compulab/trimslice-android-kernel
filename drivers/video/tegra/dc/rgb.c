@@ -93,7 +93,7 @@ static bool tegra_dc_rgb_mode_filter(struct fb_videomode *mode)
 	return true;
 }
 
-static bool tegra_dc_rgb_detect(struct tegra_dc *dc)
+static void tegra_dc_rgb_detect(struct tegra_dc *dc)
 {
 	struct fb_monspecs specs;
 	int err;
@@ -119,10 +119,8 @@ static bool tegra_dc_rgb_detect(struct tegra_dc *dc)
 	dc->connected = true;
 	tegra_dc_ext_process_hotplug(dc->ndev->id);
 
-	return true;
-
 fail:
-	return false;
+	return;
 }
 
 struct tegra_dc_out_ops tegra_dc_rgb_ops = {
