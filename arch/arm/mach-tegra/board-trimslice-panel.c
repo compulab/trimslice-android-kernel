@@ -172,7 +172,7 @@ static struct tegra_dc_platform_data trimslice_disp1_pdata = {
 };
 
 static struct tegra_dc_platform_data trimslice_disp2_pdata = {
-	.flags		= TEGRA_DC_FLAG_ENABLED,
+	.flags		= 0,
 	.default_out	= &trimslice_disp2_out,
 	.fb		= &trimslice_hdmi_fb_data,
 };
