@@ -796,27 +796,23 @@ static unsigned long tegra_dc_pclk_round_rate(struct tegra_dc *dc, int pclk)
 void tegra_dc_setup_clk(struct tegra_dc *dc, struct clk *clk)
 {
 	int pclk;
+	unsigned long rate;
 
-	if (dc->out->type == TEGRA_DC_OUT_HDMI) {
-		unsigned long rate;
-		struct clk *pll_d_out0_clk =
-			clk_get_sys(NULL, "pll_d_out0");
-		struct clk *pll_d_clk =
-			clk_get_sys(NULL, "pll_d");
+	struct clk *pll_d_out0_clk =
+		clk_get_sys(NULL, "pll_d_out0");
+	struct clk *pll_d_clk =
+		clk_get_sys(NULL, "pll_d");
 
-		if (dc->mode.pclk > 70000000)
-			rate = 594000000;
-		else if (dc->mode.pclk >= 27000000)
-			rate = 216000000;
-		else
-			rate = 252000000;
+	if (dc->mode.pclk > 30000000)
+		rate = 594000000;
+	else
+		rate = 216000000;
 
-		if (rate != clk_get_rate(pll_d_clk))
-			clk_set_rate(pll_d_clk, rate);
+	if (rate != clk_get_rate(pll_d_clk))
+		clk_set_rate(pll_d_clk, rate);
 
-		if (clk_get_parent(clk) != pll_d_out0_clk)
-			clk_set_parent(clk, pll_d_out0_clk);
-	}
+	if (clk_get_parent(clk) != pll_d_out0_clk)
+		clk_set_parent(clk, pll_d_out0_clk);
 
 	pclk = tegra_dc_pclk_round_rate(dc, dc->mode.pclk);
 	tegra_dvfs_set_rate(clk, pclk);
