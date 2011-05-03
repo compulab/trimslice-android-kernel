@@ -310,7 +310,7 @@ static struct tegra_dc_platform_data seaboard_disp1_pdata = {
 };
 
 static struct tegra_dc_platform_data seaboard_disp2_pdata = {
-	.flags		= 0,
+	.flags		= TEGRA_DC_FLAG_USE_EDID,
 	.default_out	= &seaboard_disp2_out,
 	.fb		= &seaboard_hdmi_fb_data,
 };

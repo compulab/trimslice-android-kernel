@@ -27,6 +27,7 @@
 #include <mach/tegra_dc_ext.h>
 
 struct tegra_dc;
+struct tegra_edid;
 
 struct tegra_dc_blend {
 	unsigned z[DC_N_WINDOWS];
@@ -95,6 +96,8 @@ struct tegra_dc {
 	struct work_struct		reset_work;
 
 	struct tegra_dc_ext		*ext;
+
+	struct tegra_edid		*edid;
 };
 
 static inline void tegra_dc_io_start(struct tegra_dc *dc)

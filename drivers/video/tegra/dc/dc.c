@@ -40,6 +40,7 @@
 
 #include "dc_reg.h"
 #include "dc_priv.h"
+#include "edid.h"
 
 static int no_vsync;
 
@@ -1432,6 +1433,15 @@ static int tegra_dc_probe(struct nvhost_device *ndev)
 	else
 		dev_err(&ndev->dev, "No default output specified.  Leaving output disabled.\n");
 
+	if (dc->out && dc->pdata->flags & TEGRA_DC_FLAG_USE_EDID) {
+		dc->edid = tegra_edid_create(dc->out->dcc_bus);
+		if (IS_ERR_OR_NULL(dc->edid)) {
+			dev_err(&dc->ndev->dev, "dc: can't create edid\n");
+			ret = PTR_ERR(dc->edid);
+			goto err_free_irq;
+		}
+	}
+
 	dc->vblank_syncpt = (dc->ndev->id == 0) ?
 		NVSYNCPT_VBLANK0 : NVSYNCPT_VBLANK1;
 
@@ -1510,6 +1520,9 @@ static int tegra_dc_remove(struct nvhost_device *ndev)
 
 	if (dc->enabled)
 		_tegra_dc_disable(dc);
+
+	if (dc->edid)
+		tegra_edid_destroy(dc->edid);
 
 	free_irq(dc->irq, dc);
 	clk_put(dc->emc_clk);

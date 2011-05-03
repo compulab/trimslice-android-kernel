@@ -47,7 +47,6 @@
 
 struct tegra_dc_hdmi_data {
 	struct tegra_dc			*dc;
-	struct tegra_edid		*edid;
 	struct tegra_nvhdcp		*nvhdcp;
 	struct work_struct		hpd_debounce_edge_wq;
 	struct delayed_work		hpd_debounce_stable_wq;
@@ -448,7 +447,7 @@ static bool tegra_dc_hdmi_detect(struct tegra_dc *dc)
 	if (!tegra_dc_hdmi_hpd(dc))
 		goto fail;
 
-	err = tegra_edid_get_monspecs(hdmi->edid, &specs);
+	err = tegra_edid_get_monspecs(dc->edid, &specs);
 	if (err < 0) {
 		dev_err(&dc->ndev->dev, "error reading edid\n");
 		goto fail;
@@ -636,19 +635,12 @@ static int tegra_dc_hdmi_init(struct tegra_dc *dc)
 	}
 	enable_irq_wake(gpio_to_irq(dc->out->hotplug_gpio));
 
-	hdmi->edid = tegra_edid_create(dc->out->dcc_bus);
-	if (IS_ERR_OR_NULL(hdmi->edid)) {
-		dev_err(&dc->ndev->dev, "hdmi: can't create edid\n");
-		err = PTR_ERR(hdmi->edid);
-		goto err_free_irq;
-	}
-
 	hdmi->nvhdcp = tegra_nvhdcp_create(hdmi, dc->ndev->id,
 			dc->out->dcc_bus);
 	if (IS_ERR_OR_NULL(hdmi->nvhdcp)) {
 		dev_err(&dc->ndev->dev, "hdmi: can't create nvhdcp\n");
 		err = PTR_ERR(hdmi->nvhdcp);
-		goto err_edid_destroy;
+		goto err_free_irq;
 	}
 
 	INIT_WORK(&hdmi->hpd_debounce_edge_wq, tegra_dc_hdmi_hpd_debounce_edge);
@@ -679,8 +671,6 @@ static int tegra_dc_hdmi_init(struct tegra_dc *dc)
 	}
 	return 0;
 
-err_edid_destroy:
-	tegra_edid_destroy(hdmi->edid);
 err_free_irq:
 	disable_irq_wake(gpio_to_irq(dc->out->hotplug_gpio));
 	free_irq(gpio_to_irq(dc->out->hotplug_gpio), dc);
@@ -713,7 +703,6 @@ static void tegra_dc_hdmi_destroy(struct tegra_dc *dc)
 	clk_put(hdmi->clk);
 	clk_put(hdmi->disp1_clk);
 	clk_put(hdmi->disp2_clk);
-	tegra_edid_destroy(hdmi->edid);
 	tegra_nvhdcp_destroy(hdmi->nvhdcp);
 
 	kfree(hdmi);
