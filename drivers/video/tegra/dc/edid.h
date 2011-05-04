@@ -27,5 +27,7 @@ struct tegra_edid *tegra_edid_create(int bus);
 void tegra_edid_destroy(struct tegra_edid *edid);
 
 int tegra_edid_get_monspecs(struct tegra_edid *edid, struct fb_monspecs *specs);
+int tegra_edid_read_raw(struct tegra_edid *edid, int *size, void *data);
+
 
 #endif

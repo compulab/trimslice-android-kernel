@@ -27,6 +27,7 @@
 #include "tegra_dc_ext_priv.h"
 
 static struct tegra_dc_ext_control g_control;
+static u8 edid_data[SZ_32K];
 
 int tegra_dc_ext_process_hotplug(int output)
 {
@@ -64,8 +65,22 @@ get_output_properties(struct tegra_dc_ext_control_output_properties *properties)
 
 static int get_output_edid(struct tegra_dc_ext_control_output_edid *edid)
 {
-	/* XXX implement me */
-	return -ENOTSUPP;
+	struct tegra_dc *dc;
+	int ret;
+
+	/* TODO: this should be more dynamic */
+	if (edid->handle > 2)
+		return -EINVAL;
+
+	dc = tegra_dc_get_dc(edid->handle);
+	ret = tegra_dc_get_edid(dc, &edid->size, edid_data);
+	if (ret)
+		return ret;
+
+	edid->data = kzalloc(edid->size, GFP_USER);
+	memcpy(edid->data, edid_data, edid->size);
+
+	return 0;
 }
 
 static int set_event_mask(struct tegra_dc_ext_control_user *user, u32 mask)
@@ -133,6 +148,8 @@ static long tegra_dc_ext_control_ioctl(struct file *filp, unsigned int cmd,
 			return -EFAULT;
 
 		ret = get_output_edid(&args);
+		if (ret)
+			return ret;
 
 		if (copy_to_user(user_arg, &args, sizeof(args)))
 			return -EFAULT;

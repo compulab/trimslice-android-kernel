@@ -187,6 +187,20 @@ static int tegra_edid_read(struct tegra_edid *edid)
 	return 0;
 }
 
+int tegra_edid_read_raw(struct tegra_edid *edid, int *size, void *data)
+{
+	int ret;
+
+	ret = tegra_edid_read(edid);
+	if (ret < 0)
+		return ret;
+
+	*size = edid->len;
+	memcpy(data, edid->data, *size);
+
+	return 0;
+}
+
 int tegra_edid_get_monspecs(struct tegra_edid *edid, struct fb_monspecs *specs)
 {
 	int i;

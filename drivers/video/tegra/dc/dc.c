@@ -387,6 +387,15 @@ bool tegra_dc_get_connected(struct tegra_dc *dc)
 }
 EXPORT_SYMBOL(tegra_dc_get_connected);
 
+int tegra_dc_get_edid(struct tegra_dc *dc, int *size, void *data)
+{
+	if (!dc->edid)
+		return -ENODEV;
+
+	return tegra_edid_read_raw(dc->edid, size, data);
+}
+EXPORT_SYMBOL(tegra_dc_get_edid);
+
 static u32 blend_topwin(u32 flags)
 {
 	if (flags & TEGRA_WIN_FLAG_BLEND_COVERAGE)
