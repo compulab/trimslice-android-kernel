@@ -162,6 +162,30 @@ int tegra_edid_read_block(struct tegra_edid *edid, int block, u8 *data)
 	return 0;
 }
 
+static int tegra_edid_read(struct tegra_edid *edid)
+{
+	int i;
+	int ret;
+	int extension_blocks;
+
+	ret = tegra_edid_read_block(edid, 0, edid->data);
+	if (ret)
+		return ret;
+
+	extension_blocks = edid->data[0x7e];
+
+	for (i = 1; i <= extension_blocks; i++) {
+		ret = tegra_edid_read_block(edid, i, edid->data + i * 128);
+		if (ret < 0)
+			break;
+	}
+
+	edid->len = i * 128;
+
+	tegra_edid_dump(edid);
+
+	return 0;
+}
 
 int tegra_edid_get_monspecs(struct tegra_edid *edid, struct fb_monspecs *specs)
 {
@@ -169,7 +193,7 @@ int tegra_edid_get_monspecs(struct tegra_edid *edid, struct fb_monspecs *specs)
 	int ret;
 	int extension_blocks;
 
-	ret = tegra_edid_read_block(edid, 0, edid->data);
+	ret = tegra_edid_read(edid);
 	if (ret)
 		return ret;
 
@@ -181,17 +205,9 @@ int tegra_edid_get_monspecs(struct tegra_edid *edid, struct fb_monspecs *specs)
 	extension_blocks = edid->data[0x7e];
 
 	for (i = 1; i <= extension_blocks; i++) {
-		ret = tegra_edid_read_block(edid, i, edid->data + i * 128);
-		if (ret < 0)
-			break;
-
 		if (edid->data[i * 128] == 0x2)
 			fb_edid_add_monspecs(edid->data + i * 128, specs);
 	}
-
-	edid->len = i * 128;
-
-	tegra_edid_dump(edid);
 
 	return 0;
 }
