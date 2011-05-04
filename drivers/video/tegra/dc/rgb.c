@@ -16,12 +16,15 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/fb.h>
 
 #include <mach/dc.h>
+#include <mach/fb.h>
 
 #include "dc_reg.h"
 #include "dc_priv.h"
 
+#include "edid.h"
 
 static const u32 tegra_dc_rgb_enable_pintable[] = {
 	DC_COM_PIN_OUTPUT_ENABLE0,	0x00000000,
@@ -85,8 +88,46 @@ void tegra_dc_rgb_disable(struct tegra_dc *dc)
 	tegra_dc_write_table(dc, tegra_dc_rgb_disable_pintable);
 }
 
+static bool tegra_dc_rgb_mode_filter(struct fb_videomode *mode)
+{
+	return true;
+}
+
+static bool tegra_dc_rgb_detect(struct tegra_dc *dc)
+{
+	struct fb_monspecs specs;
+	int err;
+
+	if (!dc->edid)
+		goto fail;
+
+	err = tegra_edid_get_monspecs(dc->edid, &specs);
+	if (err < 0) {
+		dev_err(&dc->ndev->dev, "error reading edid\n");
+		goto fail;
+	}
+
+	/* monitors like to lie about these but they are still useful for
+	 * detecting aspect ratios
+	 */
+	dc->out->h_size = specs.max_x * 1000;
+	dc->out->v_size = specs.max_y * 1000;
+
+	tegra_fb_update_monspecs(dc->fb, &specs, tegra_dc_rgb_mode_filter);
+	dev_info(&dc->ndev->dev, "display detected\n");
+
+	dc->connected = true;
+	tegra_dc_ext_process_hotplug(dc->ndev->id);
+
+	return true;
+
+fail:
+	return false;
+}
+
 struct tegra_dc_out_ops tegra_dc_rgb_ops = {
 	.enable = tegra_dc_rgb_enable,
 	.disable = tegra_dc_rgb_disable,
+	.detect = tegra_dc_rgb_detect,
 };
 
