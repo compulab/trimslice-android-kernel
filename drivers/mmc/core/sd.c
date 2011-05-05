@@ -551,7 +551,12 @@ static int mmc_sd_init_uhs_card(struct mmc_card *card)
 
 	/* Set bus speed mode of the card */
 	err = sd_set_bus_speed_mode(card, status);
+	if (err)
+		goto out;
 
+	/* SPI mode doesn't define CMD19 */
+	if (!mmc_host_is_spi(card->host) && card->host->ops->execute_tuning)
+		err = card->host->ops->execute_tuning(card->host);
 out:
 	kfree(status);
 
