@@ -206,7 +206,7 @@ static int __init tegra_trimslice_pci_init(void)
 	if (!machine_is_trimslice())
 		return 0;
 
-	return tegra_pcie_init(true, true);
+	return tegra_pcie_init(true, false);
 }
 subsys_initcall(tegra_trimslice_pci_init);
 
