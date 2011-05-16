@@ -35,13 +35,25 @@
 #include <mach/sdhci.h>
 #include <mach/usb_phy.h>
 #include <mach/gpio.h>
+#include <mach/suspend.h>
+
+#include <mach/clk.h>
+#include <mach/powergate.h>
+
 
 #include "board.h"
 #include "clock.h"
 #include "devices.h"
 #include "gpio-names.h"
+#include "power.h"
+#include "wakeups-t2.h"
+
 
 #include "board-trimslice.h"
+
+#define PMC_CTRL               0x0
+#define PMC_CTRL_INTR_LOW      (1 << 17)
+
 
 static struct plat_serial8250_port debug_uart_platform_data[] = {
 	{
@@ -80,7 +92,7 @@ static struct platform_device *trimslice_devices[] __initdata = {
 	&debug_uart,
 	&tegra_sdhci_device1,
 	&tegra_sdhci_device4,
-	/* &tegra_pmu_device, */
+	&tegra_pmu_device,
 	/* &tegra_rtc_device, */
 	&tegra_gart_device,
 	/* &audio_device, */
@@ -210,9 +222,57 @@ static int __init tegra_trimslice_pci_init(void)
 }
 subsys_initcall(tegra_trimslice_pci_init);
 
+
+static struct tegra_suspend_platform_data trimslice_suspend_data = {
+	.cpu_timer = 5000,
+	.cpu_off_timer = 5000,
+	.core_timer = 0x7e7e,
+	.core_off_timer = 0x7f,
+	.separate_req = true,
+	.corereq_high = false,
+	.sysclkreq_high = true,
+	.suspend_mode = TEGRA_SUSPEND_LP1,
+};
+
+/*
+static struct tegra_suspend_platform_data trimslice_suspend_data = {
+       .cpu_timer      = 2000,
+       .cpu_off_timer  = 0,
+       .suspend_mode   = TEGRA_SUSPEND_LP2,
+       .core_timer     = 0x7e7e,
+       .core_off_timer = 0,
+       .separate_req   = true,
+       .corereq_high   = false,
+       .sysclkreq_high = true,
+       .wake_enb       = TEGRA_WAKE_GPIO_PV2,
+       .wake_high      = 0,
+       .wake_low       = TEGRA_WAKE_GPIO_PV2,
+       .wake_any       = 0,
+};
+*/
+
+
+int __init trimslice_pm_init(void)
+{
+       void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
+       u32 pmc_ctrl;
+
+       /* configure the power management controller to trigger PMU
+        * interrupts when low */
+       pmc_ctrl = readl(pmc + PMC_CTRL);
+       writel(pmc_ctrl | PMC_CTRL_INTR_LOW, pmc + PMC_CTRL);
+
+       tegra_init_suspend(&trimslice_suspend_data);
+       return 0;
+}
+
+
 static void __init tegra_trimslice_init(void)
 {
+	trimslice_pm_init();
+
 	tegra_clk_init_from_table(trimslice_clk_init_table);
+
 
 	trimslice_pinmux_init();
 
