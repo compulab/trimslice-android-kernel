@@ -266,6 +266,7 @@ static void tegra_idle_enter_lp2_cpu0(struct cpuidle_device *dev,
 	bool sleep_completed = false;
 	int bin = 0;
 
+	return;
 restart:
 	if (!tegra_wait_for_both_idle(dev))
 		return;
