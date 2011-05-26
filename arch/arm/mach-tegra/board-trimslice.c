@@ -123,7 +123,6 @@ static void trimslice_usb_init(void)
 	tegra_ehci3_device.dev.platform_data = &ehci_utmi_data;
 	platform_device_register(&tegra_ehci3_device);
 
-	tegra_gpio_enable(TEGRA_GPIO_PV0);
 	tegra_ehci2_device.dev.platform_data = &ehci_ulpi_data;
 	platform_device_register(&tegra_ehci2_device);
 
