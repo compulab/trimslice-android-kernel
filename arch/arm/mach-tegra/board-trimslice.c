@@ -88,6 +88,16 @@ static struct tegra_sdhci_platform_data sdhci_pdata4 = {
 	.power_gpio	= -1,
 };
 
+static struct platform_device trimslice_audio_device = {
+	.name	= "tegra-snd-trimslice",
+	.id	= 0,
+};
+
+static struct platform_device spdif_dit_device = {
+	.name   = "spdif-dit",
+	.id     = -1,
+};
+
 static struct platform_device *trimslice_devices[] __initdata = {
 	&debug_uart,
 	&tegra_sdhci_device1,
@@ -97,11 +107,12 @@ static struct platform_device *trimslice_devices[] __initdata = {
 	&tegra_gart_device,
 	/* &audio_device, */
 	&tegra_avp_device,
-	/* &tegra_i2s_device1, */
-	/* &tegra_das_device, */
-	/* &tegra_pcm_device, */
-	/* &tegra_spdif_device, */
-	/* &spdif_dit_device, */
+	&tegra_i2s_device1,
+	&tegra_das_device,
+	&tegra_pcm_device,
+	&tegra_spdif_device,
+	&spdif_dit_device,
+	&trimslice_audio_device,
 };
 
 struct tegra_ulpi_config ehci2_phy_config = {

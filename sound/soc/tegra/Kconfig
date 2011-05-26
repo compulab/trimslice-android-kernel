@@ -46,3 +46,13 @@ config SND_TEGRA_SOC_SEABOARD
 	help
 	  Say Y or M here if you want to add support for SoC audio on the
 	  Tegra Seaboard reference board, or its derivatives Kaen and Aebl.
+
+config SND_TEGRA_SOC_TRIMSLICE
+	tristate "SoC Audio support for TrimSlice board"
+	depends on SND_TEGRA_SOC && MACH_TRIMSLICE && I2C
+	default m
+	select SND_SOC_TEGRA_I2S
+	select SND_SOC_TLV320AIC23
+	help
+	  Say Y or M here if you want to add support for SoC audio on the
+	  TrimSlice platform.
