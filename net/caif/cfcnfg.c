@@ -492,7 +492,7 @@ got_phyid:
 	switch (phy_type) {
 	case CFPHYTYPE_FRAG:
 		phy_driver =
-		    cfserl_create(CFPHYTYPE_FRAG, phyid, stx);
+		    cfserl_create(phyid, stx);
 		if (!phy_driver)
 			goto out_err;
 		break;
