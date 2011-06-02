@@ -54,6 +54,7 @@ int tegra_asoc_utils_set_rate(struct tegra_asoc_utils_data *data, int srate,
 
 	*mclk_change = ((new_baseclock != data->set_baseclock) ||
 			(mclk != data->set_mclk));
+	*mclk_change = 1;
 	if (!*mclk_change)
 	    return 0;
 
