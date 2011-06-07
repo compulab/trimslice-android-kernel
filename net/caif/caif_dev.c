@@ -25,6 +25,7 @@
 #include <net/caif/cfpkt.h>
 #include <net/caif/cfcnfg.h>
 #include <net/caif/cfserl.h>
+#include <net/caif/cfusbl.h>
 
 MODULE_LICENSE("GPL");
 
@@ -34,6 +35,7 @@ struct caif_device_entry {
 	struct list_head list;
 	struct net_device *netdev;
 	int __percpu *pcpu_refcnt;
+	bool xoff;
 };
 
 struct caif_device_entry_list {
@@ -48,6 +50,7 @@ struct caif_net {
 };
 
 static int caif_net_id;
+static int q_high = 50; /* Percent */
 
 struct cfcnfg *get_cfcnfg(struct net *net)
 {
@@ -121,15 +124,63 @@ static struct caif_device_entry *caif_get(struct net_device *dev)
 	return NULL;
 }
 
+void caif_flow_cb(struct sk_buff *skb)
+{
+	struct caif_device_entry *caifd;
+	WARN_ON(skb->dev == NULL);
+
+	rcu_read_lock();
+	caifd = caif_get(skb->dev);
+	caifd->xoff = 0;
+	caifd_hold(caifd);
+	rcu_read_unlock();
+
+	caifd->layer.up->
+		ctrlcmd(caifd->layer.up,
+			_CAIF_CTRLCMD_PHYIF_FLOW_ON_IND,
+			caifd->layer.id);
+	caifd_put(caifd);
+}
+
 static int transmit(struct cflayer *layer, struct cfpkt *pkt)
 {
 	int err;
+	struct caif_dev_common *caifdev;
 	struct caif_device_entry *caifd =
 	    container_of(layer, struct caif_device_entry, layer);
 	struct sk_buff *skb;
 
 	skb = cfpkt_tonative(pkt);
 	skb->dev = caifd->netdev;
+	skb_reset_network_header(skb);
+	skb->protocol = htons(ETH_P_CAIF);
+	caifdev = netdev_priv(caifd->netdev);
+
+	if (caifdev->flowctrl == NULL && caifd->netdev->tx_queue_len > 0 &&
+			!caifd->xoff) {
+		struct netdev_queue *txq;
+		int high;
+
+		txq = netdev_get_tx_queue(skb->dev, 0);
+		high = (caifd->netdev->tx_queue_len * q_high) / 100;
+
+		/* If we run with a TX queue, check if the queue is too long*/
+		if (netif_queue_stopped(caifd->netdev) ||
+			qdisc_qlen(txq->qdisc) > high) {
+
+			pr_debug("queue stop(%d) or full (%d>%d) - XOFF\n",
+					netif_queue_stopped(caifd->netdev),
+					qdisc_qlen(txq->qdisc), high);
+			caifd->xoff = 1;
+			/* Hijack this skb free callback function. */
+			skb_orphan(skb);
+			skb->destructor = caif_flow_cb;
+			caifd->layer.up->
+				ctrlcmd(caifd->layer.up,
+					_CAIF_CTRLCMD_PHYIF_FLOW_OFF_IND,
+					caifd->layer.id);
+		}
+	}
 
 	err = dev_queue_xmit(skb);
 	if (err > 0)
@@ -279,6 +330,9 @@ static int caif_device_notify(struct notifier_block *me, unsigned long what,
 
 	switch (what) {
 	case NETDEV_REGISTER:
+		if (caifd != NULL)
+			break;
+
 		caifdev = netdev_priv(dev);
 
 		link_support = NULL;
@@ -451,6 +505,9 @@ static int __init caif_device_init(void)
 	if (result)
 		return result;
 
+#ifdef CONFIG_CAIF_USB
+	cfusbl_init();
+#endif
 	register_netdevice_notifier(&caif_device_notifier);
 	dev_add_pack(&caif_packet_type);
 
@@ -462,6 +519,10 @@ static void __exit caif_device_exit(void)
 	unregister_pernet_device(&caif_net_ops);
 	unregister_netdevice_notifier(&caif_device_notifier);
 	dev_remove_pack(&caif_packet_type);
+
+#ifdef CONFIG_CAIF_USB
+	cfusbl_exit();
+#endif
 }
 
 module_init(caif_device_init);

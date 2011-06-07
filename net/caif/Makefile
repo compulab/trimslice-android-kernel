@@ -7,6 +7,10 @@ caif-y := caif_dev.o \
 	cfrfml.o cfvidl.o cfutill.o \
 	cfsrvl.o cfpkt_skbuff.o
 
+ifdef CONFIG_CAIF_USB
+caif-y += cfusbl.o
+endif
+
 obj-$(CONFIG_CAIF) += caif.o
 obj-$(CONFIG_CAIF_NETDEV) += chnl_net.o
 obj-$(CONFIG_CAIF) += caif_socket.o
