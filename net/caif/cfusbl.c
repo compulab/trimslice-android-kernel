@@ -22,15 +22,17 @@
 
 MODULE_LICENSE("GPL");
 
-#define CAIF_USB 0x88b5		/* Protocol used for CAIF-USB */
-#define USB_HEADLEN 19		/* Overhead of ethernet header. */
-#define CFNCM_HEAD_SZ 14	/* Overhead of ethernet header. */
-#define CFNCM_HEADPAD_SZ 1	/* Number of bytes to align. */
-#define CFNCM_HEADPAD 16	/* Number of bytes to align. TODO: sysfs? */
+#define CAIF_ETH_TYPE 0x88b5	/* Protocol ID used for CAIF-USB */
+#define CFUSB_PAD_DESCR_SZ 1	/* Alignment descriptor length */
+#define CFUSB_ALIGNMENT 4	/* Number of bytes to align. TODO: sysfs? */
+#define CFUSB_MAX_HEADLEN (CFUSB_PAD_DESCR_SZ + CFUSB_ALIGNMENT-1)
+#define VID_STE 0x04cc		/* USB Product ID for ST-Ericsson */
+#define PID_CAIF_MODEM 0x2306	/* Product id for CAIF Modems */
+#define PID_PC_CARD 0x230f	/* FIXME: Temporar PC-card PID, TO BE REMOVED */
 
 struct cfusbl {
 	struct cflayer layer;
-	u8 tx_eth_hdr[14];
+	u8 tx_eth_hdr[ETH_HLEN];
 };
 
 static bool pack_added;
@@ -49,7 +51,7 @@ static int cfusbl_transmit(struct cflayer *layr, struct cfpkt *pkt)
 {
 	struct caif_payload_info *info;
 	u8 hpad;
-	u8 zeros[CFNCM_HEADPAD];
+	u8 zeros[CFUSB_ALIGNMENT];
 	struct sk_buff *skb;
 	struct cfusbl *usbl = container_of(layr, struct cfusbl, layer);
 
@@ -60,9 +62,9 @@ static int cfusbl_transmit(struct cflayer *layr, struct cfpkt *pkt)
 	skb->protocol = htons(ETH_P_IP);
 
 	info = cfpkt_info(pkt);
-	hpad = (info->hdr_len + CFNCM_HEADPAD_SZ) & (CFNCM_HEADPAD - 1);
+	hpad = (info->hdr_len + CFUSB_PAD_DESCR_SZ) & (CFUSB_ALIGNMENT - 1);
 
-	if (skb_headroom(skb) < CFNCM_HEAD_SZ + CFNCM_HEADPAD_SZ + hpad) {
+	if (skb_headroom(skb) < ETH_HLEN + CFUSB_PAD_DESCR_SZ + hpad) {
 		pr_warn("Headroom to small\n");
 		kfree_skb(skb);
 		return -EIO;
@@ -82,7 +84,8 @@ static void cfusbl_ctrlcmd(struct cflayer *layr, enum caif_ctrlcmd ctrl,
 		layr->up->ctrlcmd(layr->up, ctrl, layr->id);
 }
 
-struct cflayer *cfusbl_create(int phyid, u8 ethaddr[6])
+struct cflayer *cfusbl_create(int phyid, u8 ethaddr[ETH_ALEN],
+					u8 braddr[ETH_ALEN])
 {
 	struct cfusbl *this = kmalloc(sizeof(struct cfusbl), GFP_ATOMIC);
 
@@ -105,20 +108,19 @@ struct cflayer *cfusbl_create(int phyid, u8 ethaddr[6])
 	 *	5-11	source address
 	 *	12-13	protocol type
 	 */
-	memcpy(this->tx_eth_hdr, ethaddr, 6);
-	this->tx_eth_hdr[4] += 1;
-	memcpy(&this->tx_eth_hdr[6], ethaddr, 6);
-	this->tx_eth_hdr[12] = (CAIF_USB >> 8) & 0xff;
-	this->tx_eth_hdr[13] = CAIF_USB & 0xff;
+	memcpy(&this->tx_eth_hdr[ETH_ALEN], braddr, ETH_ALEN);
+	memcpy(&this->tx_eth_hdr[ETH_ALEN], ethaddr, ETH_ALEN);
+	this->tx_eth_hdr[12] = cpu_to_be16(CAIF_ETH_TYPE) & 0xff;
+	this->tx_eth_hdr[13] = (cpu_to_be16(CAIF_ETH_TYPE) >> 8) & 0xff;
 	pr_debug("caif ethernet TX-header dst:%pM src:%pM type:%02x%02x\n",
-			this->tx_eth_hdr,this->tx_eth_hdr + 6,
+			this->tx_eth_hdr,this->tx_eth_hdr + ETH_ALEN,
 			this->tx_eth_hdr[12],this->tx_eth_hdr[13]);
 
 	return (struct cflayer *) this;
 }
 
 static struct packet_type caif_usb_type __read_mostly = {
-	.type = cpu_to_be16(CAIF_USB),
+	.type = cpu_to_be16(CAIF_ETH_TYPE),
 };
 
 static int cfusbl_device_notify(struct notifier_block *me, unsigned long what,
@@ -141,17 +143,16 @@ static int cfusbl_device_notify(struct notifier_block *me, unsigned long what,
 	if (strncmp(drvinfo.driver, "cdc_ncm", 7) != 0)
 		return 0;
 
-	pr_debug("USB NCM Net device (Device number:%d): 0x%4.4x:0x%4.4x:0x%4.4x",
-		usbdev->devnum,
+
+	pr_debug("USB CDC NCM device VID:0x%4x PID:0x%4x\n",
 		le16_to_cpu(usbdev->descriptor.idVendor),
-		le16_to_cpu(usbdev->descriptor.idProduct),
-		le16_to_cpu(usbdev->descriptor.bcdDevice));
+		le16_to_cpu(usbdev->descriptor.idProduct));
 
 	/* Check for STE Bridge build */
-	if (!(usbdev->descriptor.idVendor == 0x04cc &&
-			(usbdev->descriptor.idProduct == 0x2306 ||
+	if (!(le16_to_cpu(usbdev->descriptor.idVendor) == VID_STE &&
+		(le16_to_cpu(usbdev->descriptor.idProduct) == PID_CAIF_MODEM ||
 	/* FIXME: 0x2306 is PC-card and used only temporary! */
-					usbdev->descriptor.idProduct == 0x230f)))
+		le16_to_cpu(usbdev->descriptor.idProduct) == PID_PC_CARD)))
 		return 0;
 
 	memset(&common, 0, sizeof(common));
@@ -161,7 +162,8 @@ static int cfusbl_device_notify(struct notifier_block *me, unsigned long what,
 	common.link_select = CAIF_LINK_HIGH_BANDW;
 	common.flowctrl = NULL;
 
-	link_support = cfusbl_create(dev->ifindex, dev->dev_addr);
+	link_support = cfusbl_create(dev->ifindex, dev->dev_addr,
+					dev->broadcast);
 	if (!link_support) {
 		pr_warn("Out of memory\n");
 		return -ENOMEM;
@@ -170,7 +172,7 @@ static int cfusbl_device_notify(struct notifier_block *me, unsigned long what,
 	if (dev->num_tx_queues > 1)
 		pr_warn("USB device uses more than one tx queue\n");
 
-	caif_enroll_dev(dev, &common, link_support, USB_HEADLEN,
+	caif_enroll_dev(dev, &common, link_support, CFUSB_MAX_HEADLEN,
 			&layer, &caif_usb_type.func);
 	if (!pack_added)
 		dev_add_pack(&caif_usb_type);
