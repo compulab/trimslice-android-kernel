@@ -42,7 +42,7 @@ config CAIF_NETDEV
 	If unsure say Y.
 
 config CAIF_USB
-	tristate "CAIF USB support"
+	bool "CAIF USB support"
 	depends on CAIF
 	default CAIF
 	---help---

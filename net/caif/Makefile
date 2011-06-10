@@ -1,4 +1,5 @@
-ccflags-$(CONFIG_CAIF_DEBUG)     :=      -DDEBUG
+ccflags-$(CONFIG_CAIF_DEBUG)	:=	-DDEBUG
+ccflags-$(CONFIG_CAIF_USB)	:=      -DCONFIG_CAIF_USB
 
 caif-y := caif_dev.o \
 	cfcnfg.o cfmuxl.o cfctrl.o  \
@@ -6,10 +7,7 @@ caif-y := caif_dev.o \
 	cfserl.o cfdgml.o  \
 	cfrfml.o cfvidl.o cfutill.o \
 	cfsrvl.o cfpkt_skbuff.o
-
-ifdef CONFIG_CAIF_USB
-caif-y += cfusbl.o
-endif
+caif-$(CONFIG_CAIF_USB) += cfusbl.o
 
 obj-$(CONFIG_CAIF) += caif.o
 obj-$(CONFIG_CAIF_NETDEV) += chnl_net.o
