@@ -246,7 +246,6 @@ static int __init tegra_trimslice_pci_init(void)
 }
 subsys_initcall(tegra_trimslice_pci_init);
 
-
 static struct tegra_suspend_platform_data trimslice_suspend_data = {
 	.cpu_timer = 5000,
 	.cpu_off_timer = 5000,
@@ -258,23 +257,16 @@ static struct tegra_suspend_platform_data trimslice_suspend_data = {
 	.suspend_mode = TEGRA_SUSPEND_LP1,
 };
 
-/*
-static struct tegra_suspend_platform_data trimslice_suspend_data = {
-       .cpu_timer      = 2000,
-       .cpu_off_timer  = 0,
-       .suspend_mode   = TEGRA_SUSPEND_LP2,
-       .core_timer     = 0x7e7e,
-       .core_off_timer = 0,
-       .separate_req   = true,
-       .corereq_high   = false,
-       .sysclkreq_high = true,
-       .wake_enb       = TEGRA_WAKE_GPIO_PV2,
-       .wake_high      = 0,
-       .wake_low       = TEGRA_WAKE_GPIO_PV2,
-       .wake_any       = 0,
-};
-*/
-
+static void trimslice_power_off(void)
+{
+	/* Initiate power down sequence in PMIC */
+	gpio_set_value(TEGRA_GPIO_PX7, 0);
+	local_irq_disable();
+	while (1) {
+		dsb();
+		__asm__ ("wfi");
+	}
+}
 
 int __init trimslice_pm_init(void)
 {
@@ -287,6 +279,14 @@ int __init trimslice_pm_init(void)
        writel(pmc_ctrl | PMC_CTRL_INTR_LOW, pmc + PMC_CTRL);
 
        tegra_init_suspend(&trimslice_suspend_data);
+
+       /* GPIO PX7 is used to signal the PMIC to start CPU power off sequence */
+       tegra_gpio_enable(TEGRA_GPIO_PX7);
+       gpio_request(TEGRA_GPIO_PX7, "software shutdown");
+       gpio_direction_output(TEGRA_GPIO_PX7, 1);
+
+       pm_power_off = trimslice_power_off;
+
        return 0;
 }
 
