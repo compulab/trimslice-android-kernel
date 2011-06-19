@@ -26,6 +26,9 @@
 #include <linux/platform_data/tegra_usb.h>
 #include <linux/i2c.h>
 #include <linux/i2c-tegra.h>
+#include <linux/gpio_keys.h>
+#include <linux/gpio.h>
+#include <linux/input.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -104,6 +107,51 @@ static struct platform_device trimslice_audio_device1 = {
 	.id	= 1,
 };
 
+#define GPIO_KEY(_id, _gpio, _iswake)		\
+	{					\
+		.code = _id,			\
+		.gpio = TEGRA_GPIO_##_gpio,	\
+		.active_low = 1,		\
+		.desc = #_id,			\
+		.type = EV_KEY,			\
+		.wakeup = _iswake,		\
+		.debounce_interval = 10,	\
+	}
+
+static struct gpio_keys_button trimslice_keys[] = {
+	[0] = {
+		.code = KEY_POWER,
+		.gpio = TEGRA_GPIO_PX6,
+		.active_low = 1,
+		.desc = "power button",
+		.type = EV_KEY,
+		.wakeup = 0,
+		.debounce_interval = 10,
+		.active_low = 1,
+	},
+};
+
+static struct gpio_keys_platform_data trimslice_keys_platform_data = {
+	.buttons	= trimslice_keys,
+	.nbuttons	= ARRAY_SIZE(trimslice_keys),
+};
+
+static struct platform_device trimslice_keys_device = {
+	.name	= "gpio-keys",
+	.id	= 0,
+	.dev	= {
+		.platform_data	= &trimslice_keys_platform_data,
+	},
+};
+
+static void trimslice_keys_init(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(trimslice_keys); i++)
+		tegra_gpio_enable(trimslice_keys[i].gpio);
+}
+
 static struct platform_device *trimslice_devices[] __initdata = {
 	&debug_uart,
 	&tegra_sdhci_device1,
@@ -120,6 +168,7 @@ static struct platform_device *trimslice_devices[] __initdata = {
 	&spdif_dit_device,
 	&trimslice_audio_device0,
 	&trimslice_audio_device1,
+	&trimslice_keys_device,
 };
 
 struct tegra_ulpi_config ehci2_phy_config = {
@@ -246,6 +295,7 @@ static int __init tegra_trimslice_pci_init(void)
 }
 subsys_initcall(tegra_trimslice_pci_init);
 
+
 static struct tegra_suspend_platform_data trimslice_suspend_data = {
 	.cpu_timer = 5000,
 	.cpu_off_timer = 5000,
@@ -313,6 +363,7 @@ static void __init tegra_trimslice_init(void)
 	trimslice_usb_init();
 	trimslice_i2c_init();
 	trimslice_panel_init();
+	trimslice_keys_init();
 }
 
 MACHINE_START(TRIMSLICE, "trimslice")
