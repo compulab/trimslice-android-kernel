@@ -227,6 +227,13 @@ static void __init tegra_trimslice_fixup(struct machine_desc *desc,
 static __initdata struct tegra_clk_init_table trimslice_clk_init_table[] = {
 	/* name		parent		rate		enabled */
 	{ "uarta",	"pll_p",	216000000,	true },
+	{ "pll_p",	"clk_m",	216000000,	true },
+	{ "pll_p_out1",	"pll_p",	28800000,	true },
+	{ "pll_a",	"pll_p_out1",	56448000,	true },
+	{ "pll_a_out0",	"pll_a",	11289600,	true },
+	{ "cdev1",	"pll_a_out0",	11289600,	true },
+	{ "i2s1",	"pll_a_out0",	11289600,	true },
+	{ "spdif_out",	"pll_a_out0",	11289600,	true },
 	{ NULL,		NULL,		0,		0},
 };
 
