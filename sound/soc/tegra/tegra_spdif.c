@@ -147,7 +147,7 @@ static int tegra_spdif_hw_params(struct snd_pcm_substream *substream,
 		spdifclock = 4096000;
 		break;
 	case 44100:
-		spdifclock = 6000000;
+		spdifclock = 5644800;
 		break;
 	case 48000:
 		spdifclock = 6144000;
