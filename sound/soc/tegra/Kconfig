@@ -51,8 +51,10 @@ config SND_TEGRA_SOC_TRIMSLICE
 	tristate "SoC Audio support for TrimSlice board"
 	depends on SND_TEGRA_SOC && MACH_TRIMSLICE && I2C
 	default m
-	select SND_SOC_TEGRA_I2S
+	select SND_TEGRA_SOC_I2S
+	select SND_TEGRA_SOC_SPDIF
 	select SND_SOC_TLV320AIC23
+	select SND_SOC_SPDIF
 	help
 	  Say Y or M here if you want to add support for SoC audio on the
 	  TrimSlice platform.
