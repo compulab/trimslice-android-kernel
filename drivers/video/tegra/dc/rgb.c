@@ -88,9 +88,45 @@ void tegra_dc_rgb_disable(struct tegra_dc *dc)
 	tegra_dc_write_table(dc, tegra_dc_rgb_disable_pintable);
 }
 
+extern int tegra_dc_check_best_rate(struct tegra_dc_mode *mode);
+
+#define LCD_MAX_HORIZONTAL_RESOLUTION 1680
+#define LCD_MAX_VERTICAL_RESOLUTION 1050
+
 static bool tegra_dc_rgb_mode_filter(struct fb_videomode *mode)
 {
-	return true;
+	int clocks;
+	struct tegra_dc_mode dc_mode;
+	bool mode_supported = false;
+
+	/* sanity check for EDID modes */
+	if (mode->pixclock == 0)
+		return false;
+
+	clocks = (mode->left_margin + mode->xres + mode->right_margin
+		+ mode->hsync_len) *
+		(mode->upper_margin + mode->yres + mode->lower_margin
+		+ mode->vsync_len);
+	if (clocks)
+		mode->refresh = (PICOS2KHZ(mode->pixclock) * 1000) / clocks;
+
+	dc_mode.pclk = PICOS2KHZ(mode->pixclock) * 1000;
+	dc_mode.h_active = mode->xres;
+	dc_mode.v_active = mode->yres;
+
+	if (tegra_dc_check_best_rate(&dc_mode) > 0)
+		mode_supported = true;
+
+	if (mode->xres > LCD_MAX_HORIZONTAL_RESOLUTION ||
+		mode->yres > LCD_MAX_VERTICAL_RESOLUTION )
+		mode_supported = false;
+
+	pr_info("\t%dx%d-%d (pclk=%d) -> %s\n",
+		dc_mode.h_active, dc_mode.v_active,
+		mode->refresh, dc_mode.pclk,
+		mode_supported ? "supported" : "rejected");
+
+	return mode_supported;
 }
 
 static void tegra_dc_rgb_detect(struct tegra_dc *dc)
