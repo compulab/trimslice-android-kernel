@@ -1,7 +1,7 @@
 /*
  * arch/arm/mach-tegra/include/mach/fb.h
  *
- * Copyright (C) 2010 Google, Inc.
+ * Copyright (C) 2010, 2011 Google, Inc.
  *
  * Author:
  *	Erik Gilling <konkers@google.com>
@@ -31,7 +31,7 @@ struct tegra_fb_info *tegra_fb_register(struct nvhost_device *ndev,
 void tegra_fb_unregister(struct tegra_fb_info *fb_info);
 void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
 			      struct fb_monspecs *specs,
-			      bool (*mode_filter)(struct fb_videomode *mode));
+                              bool (*mode_filter)(struct tegra_dc *dc, struct fb_videomode *mode));
 void tegra_fb_transition(struct tegra_fb_info *fb_info, bool enable);
 #else
 static inline struct tegra_fb_info *tegra_fb_register(struct nvhost_device *ndev,
@@ -48,7 +48,7 @@ static inline void tegra_fb_unregister(struct tegra_fb_info *fb_info)
 
 void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
 			      struct fb_monspecs *specs,
-			      bool (*mode_filter)(struct fb_videomode *mode))
+			bool (*mode_filter)(struct tegra_dc *dc, struct fb_videomode *mode))
 {
 }
 void tegra_fb_suspend(struct tegra_fb_info *tegra_fb)

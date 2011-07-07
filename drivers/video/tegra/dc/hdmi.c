@@ -407,7 +407,8 @@ static bool tegra_dc_hdmi_mode_equal(const struct fb_videomode *mode1,
 static void tegra_dc_hdmi_enable(struct tegra_dc *dc);
 
 extern int tegra_dc_check_best_rate(struct tegra_dc_mode *mode);
-static bool tegra_dc_hdmi_mode_filter(struct fb_videomode *mode)
+
+static bool tegra_dc_hdmi_mode_filter(struct tegra_dc *dc, struct fb_videomode *mode)
 {
 	int i;
 	int clocks;
@@ -437,7 +438,7 @@ static bool tegra_dc_hdmi_mode_filter(struct fb_videomode *mode)
 	dc_mode.h_active = mode->xres;
 	dc_mode.v_active = mode->yres;
 
-	if (tegra_dc_check_best_rate(&dc_mode) > 0)
+	if (tegra_dc_check_pll_rate(dc, &dc_mode) > 0)
 		mode_supported = true;
 
 	pr_info("\t%dx%d-%d (pclk=%d) -> %s\n",
@@ -466,6 +467,7 @@ static bool tegra_dc_hdmi_detect(struct tegra_dc *dc)
 {
 	struct tegra_dc_hdmi_data *hdmi = tegra_dc_get_outdata(dc);
 	struct fb_monspecs specs;
+	struct tegra_dc *rgb_dc;
 	int err;
 
 	if (!tegra_dc_hdmi_hpd(dc))
@@ -486,9 +488,32 @@ static bool tegra_dc_hdmi_detect(struct tegra_dc *dc)
 
 	hdmi->dvi = !(specs.misc & FB_MISC_HDMI);
 
+	dev_info(&dc->ndev->dev, "detecting best mode using EDID:\n");
 	tegra_fb_update_monspecs(dc->fb, &specs, tegra_dc_hdmi_mode_filter);
 
 	dev_info(&dc->ndev->dev, "display detected\n");
+
+	/* Notify RGB dc of HDMI dc presence and its PLL_D selection.
+	 * We want to give priority for HDMI as it can generate 1080p resolution
+	 */
+        rgb_dc = (struct tegra_dc *)nvhost_get_drvdata (
+		(struct nvhost_device *)dc->ndev->dev_neighbour);
+
+	if (rgb_dc != NULL) {
+		if (rgb_dc->connected) {
+			dev_info(&dc->ndev->dev,"warning: both HDMI and DVI "\
+			"displays are detected.\n Ajusting DVI resolutions to "\
+			"preserve HDMI PLL_D selection "\
+                        "(pll_d=%d, HDMI mode:%dx%d)",
+				tegra_dc_check_pll_rate(dc, &dc->mode),
+				dc->mode.h_active,
+				dc->mode.v_active);
+
+			rgb_dc->predefined_pll_rate =
+				tegra_dc_check_pll_rate(dc, &dc->mode);
+			rgb_dc->out_ops->detect(rgb_dc);
+		}
+	}
 
 	dc->connected = true;
 	tegra_dc_ext_process_hotplug(dc->ndev->id);

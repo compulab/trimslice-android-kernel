@@ -811,7 +811,7 @@ unsigned long pll_d_rates[] = {
 	1000000000
 };
 
-int tegra_dc_check_best_rate(struct tegra_dc_mode *mode)
+int tegra_dc_check_pll_rate(struct tegra_dc *dc, struct tegra_dc_mode *mode)
 {
 	int pclk,pclk_best=0;
 	unsigned long div;
@@ -824,7 +824,12 @@ int tegra_dc_check_best_rate(struct tegra_dc_mode *mode)
 
 	for (i=0; i < ARRAY_SIZE(pll_d_rates); i++)
 	{
-		rate = pll_d_rates[i];
+		if (dc->predefined_pll_rate > 0){
+		     rate =  dc->predefined_pll_rate;
+		     i =  ARRAY_SIZE(pll_d_rates);
+	        } else
+		     rate = pll_d_rates[i];
+
 		div = DIV_ROUND_CLOSEST(rate * 2,mode-> pclk);
 		if (div < 2)
 			return 0;
@@ -863,7 +868,7 @@ void tegra_dc_setup_clk(struct tegra_dc *dc, struct clk *clk)
 	struct clk *pll_d_clk =
 		clk_get_sys(NULL, "pll_d");
 
-	rate = tegra_dc_check_best_rate(&dc->mode);
+	rate = tegra_dc_check_pll_rate(dc, &dc->mode);
 
 	if (rate != clk_get_rate(pll_d_clk))
 		clk_set_rate(pll_d_clk, rate);
@@ -1442,6 +1447,7 @@ static int tegra_dc_probe(struct nvhost_device *ndev)
 	dc->irq = irq;
 	dc->ndev = ndev;
 	dc->pdata = ndev->dev.platform_data;
+	dc->predefined_pll_rate = 0;
 
 	/*
 	 * The emc is a shared clock, it will be set based on

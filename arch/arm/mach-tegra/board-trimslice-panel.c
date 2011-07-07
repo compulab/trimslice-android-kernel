@@ -108,26 +108,11 @@ static struct resource trimslice_disp2_resources[] = {
 	},
 };
 
-static struct tegra_dc_mode trimslice_panel_modes[] = {
-	{
-		.pclk = 59400000,
-		.h_ref_to_sync = 11,
-		.v_ref_to_sync = 1,
-		.h_sync_width = 58,
-		.v_sync_width = 4,
-		.h_back_porch = 58,
-		.v_back_porch = 4,
-		.h_active = 1024,
-		.v_active = 768,
-		.h_front_porch = 58,
-		.v_front_porch = 4,
-	},
-};
 
 static struct tegra_fb_data trimslice_fb_data = {
 	.win		= 0,
-	.xres		= 1024,
-	.yres		= 768,
+	.xres		= 1280,
+	.yres		= 720,
 	.bits_per_pixel	= 16,
 };
 
@@ -143,9 +128,6 @@ static struct tegra_dc_out trimslice_disp1_out = {
 
 	.align		= TEGRA_DC_ALIGN_LSB,
 	.order		= TEGRA_DC_ORDER_RED_BLUE,
-
-	.modes	 	= trimslice_panel_modes,
-	.n_modes 	= ARRAY_SIZE(trimslice_panel_modes),
 
 	.enable		= trimslice_panel_enable,
 	.disable	= trimslice_panel_disable,
@@ -166,7 +148,7 @@ static struct tegra_dc_out trimslice_disp2_out = {
 };
 
 static struct tegra_dc_platform_data trimslice_disp1_pdata = {
-	.flags		= TEGRA_DC_FLAG_ENABLED | TEGRA_DC_FLAG_USE_EDID,
+	.flags		= TEGRA_DC_FLAG_USE_EDID,
 	.default_out	= &trimslice_disp1_out,
 	.fb		= &trimslice_fb_data,
 };
@@ -237,12 +219,27 @@ int __init trimslice_panel_init(void)
 {
 	int err;
 
+	/* Configure HDMI hotplug  as input */
 	gpio_request(trimslice_hdmi_hpd, "hdmi_hpd");
 	gpio_direction_input(trimslice_hdmi_hpd);
 	tegra_gpio_enable(trimslice_hdmi_hpd);
 
+	/* Disable DVI trasceiver by default */
+	gpio_request(trimslice_lvds_shutdown, "dvi shutdown");
+	gpio_direction_output(trimslice_lvds_shutdown, 0);
+	tegra_gpio_enable(trimslice_lvds_shutdown);
+
 	err = platform_add_devices(trimslice_gfx_devices,
 				   ARRAY_SIZE(trimslice_gfx_devices));
+
+	/* Make nvhost devices aware one of the another.
+	   This is required as the devices use mutual resource (PLL_D)
+	   and should be aware of the neighbour requirement.
+	 */
+	trimslice_disp1_device.dev_neighbour =
+		(struct device *) &trimslice_disp2_device;
+	trimslice_disp2_device.dev_neighbour
+		= (struct device *) &trimslice_disp1_device;
 
 	if (!err)
 		err = nvhost_device_register(&trimslice_disp1_device);

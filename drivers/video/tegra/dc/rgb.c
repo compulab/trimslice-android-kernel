@@ -93,7 +93,7 @@ extern int tegra_dc_check_best_rate(struct tegra_dc_mode *mode);
 #define LCD_MAX_HORIZONTAL_RESOLUTION 1680
 #define LCD_MAX_VERTICAL_RESOLUTION 1050
 
-static bool tegra_dc_rgb_mode_filter(struct fb_videomode *mode)
+static bool tegra_dc_rgb_mode_filter(struct tegra_dc *dc, struct fb_videomode *mode)
 {
 	int clocks;
 	struct tegra_dc_mode dc_mode;
@@ -114,7 +114,7 @@ static bool tegra_dc_rgb_mode_filter(struct fb_videomode *mode)
 	dc_mode.h_active = mode->xres;
 	dc_mode.v_active = mode->yres;
 
-	if (tegra_dc_check_best_rate(&dc_mode) > 0)
+	if (tegra_dc_check_pll_rate(dc, &dc_mode) >0 )
 		mode_supported = true;
 
 	if (mode->xres > LCD_MAX_HORIZONTAL_RESOLUTION ||

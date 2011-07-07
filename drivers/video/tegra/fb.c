@@ -1,7 +1,7 @@
 /*
  * drivers/video/tegra/fb.c
  *
- * Copyright (C) 2010 Google, Inc.
+ * Copyright (C) 2010, 2011 Google, Inc.
  * Author: Erik Gilling <konkers@android.com>
  *         Colin Cross <ccross@android.com>
  *         Travis Geiselbrecht <travis@palm.com>
@@ -214,7 +214,7 @@ static void tegra_fb_flip_win(struct tegra_fb_info *tegra_fb)
 
 	switch (info->var.bits_per_pixel) {
 	default:
-		WARN_ON(1);
+		/*WARN_ON(1);*/
 		/* fall through */
 	case 32:
 		tegra_fb->win->fmt = TEGRA_WIN_FMT_R8G8B8A8;
@@ -406,12 +406,14 @@ const struct fb_videomode *fb_find_best_supported_mode(const struct fb_monspecs 
 	/* last resort, use the very first mode */
 	best = m1;
 finished:
+	pr_info("best mode selected: %dx%d-%d",
+		best->xres,best->yres,best->refresh);
 	return best;
 }
 
 void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
 			      struct fb_monspecs *specs,
-			      bool (*mode_filter)(struct fb_videomode *mode))
+			      bool (*mode_filter)(struct tegra_dc *dc, struct fb_videomode *mode))
 {
 	struct fb_event event;
 	struct fb_modelist *m;
@@ -438,7 +440,7 @@ void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
 
 	for (i = 0; i < specs->modedb_len; i++) {
 		if (mode_filter) {
-			if (mode_filter(&specs->modedb[i])) {
+			if (mode_filter(fb_info->win->dc, &specs->modedb[i])) {
 				fb_add_videomode(&specs->modedb[i],
 						 &fb_info->info->modelist);
 				if (i == 0)

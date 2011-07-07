@@ -98,6 +98,7 @@ struct tegra_dc {
 	struct tegra_dc_ext		*ext;
 
 	struct tegra_edid		*edid;
+	u32                             predefined_pll_rate;
 };
 
 static inline void tegra_dc_io_start(struct tegra_dc *dc)
@@ -147,6 +148,7 @@ static inline void *tegra_dc_get_outdata(struct tegra_dc *dc)
 }
 
 void tegra_dc_setup_clk(struct tegra_dc *dc, struct clk *clk);
+int tegra_dc_check_pll_rate(struct tegra_dc *dc, struct tegra_dc_mode *mode);
 
 extern struct tegra_dc_out_ops tegra_dc_rgb_ops;
 extern struct tegra_dc_out_ops tegra_dc_hdmi_ops;
