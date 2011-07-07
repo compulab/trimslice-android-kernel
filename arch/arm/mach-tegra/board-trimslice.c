@@ -350,11 +350,6 @@ static void __init tegra_trimslice_init(void)
 
 	trimslice_pinmux_init();
 
-	/* Disable video input */
-	tegra_gpio_enable(TEGRA_GPIO_PP6);
-	gpio_request(TEGRA_GPIO_PP6, "video_en");
-	gpio_direction_output(TEGRA_GPIO_PP6, 0);
-
 	tegra_sdhci_device1.dev.platform_data = &sdhci_pdata1;
 	tegra_sdhci_device4.dev.platform_data = &sdhci_pdata4;
 

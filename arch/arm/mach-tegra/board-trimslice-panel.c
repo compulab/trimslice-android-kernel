@@ -1,7 +1,7 @@
 /*
  * arch/arm/mach-tegra/board-trimslice-panel.c
  *
- * Copyright (c) 2010, 2011, NVIDIA Corporation.
+ * Copyright (c) 2010, NVIDIA Corporation.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@
 
 static int trimslice_panel_enable(void)
 {
-/*	gpio_set_value(trimslice_lvds_shutdown, 1);*/
+	gpio_set_value(trimslice_lvds_shutdown, 1);
 	return 0;
 }
 
@@ -244,15 +244,8 @@ int __init trimslice_panel_init(void)
 	err = platform_add_devices(trimslice_gfx_devices,
 				   ARRAY_SIZE(trimslice_gfx_devices));
 
-	tegra_gpio_enable(TEGRA_GPIO_PP5);
-	gpio_request(TEGRA_GPIO_PP5, "dvi_en");
-	gpio_direction_output(TEGRA_GPIO_PP5, 0);
-
-	trimslice_panel_disable();
-
 	if (!err)
 		err = nvhost_device_register(&trimslice_disp1_device);
-
 	if (!err)
 		err = nvhost_device_register(&trimslice_disp2_device);
 
