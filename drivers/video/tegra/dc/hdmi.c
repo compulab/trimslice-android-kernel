@@ -404,24 +404,48 @@ static bool tegra_dc_hdmi_mode_equal(const struct fb_videomode *mode1,
 		mode1->vmode	== mode2->vmode;
 }
 
+static void tegra_dc_hdmi_enable(struct tegra_dc *dc);
+
+extern int tegra_dc_check_best_rate(struct tegra_dc_mode *mode);
 static bool tegra_dc_hdmi_mode_filter(struct fb_videomode *mode)
 {
 	int i;
 	int clocks;
+	struct tegra_dc_mode dc_mode;
+	bool mode_supported = false;
+
+	/* sanity check for EDID modes */
+	if (mode->pixclock == 0)
+		return false;
 
 	for (i = 0; i < ARRAY_SIZE(tegra_dc_hdmi_supported_modes); i++) {
 		if (tegra_dc_hdmi_mode_equal(&tegra_dc_hdmi_supported_modes[i],
-					     mode)) {
+		mode)) {
 			memcpy(mode, &tegra_dc_hdmi_supported_modes[i], sizeof(*mode));
 			mode->flag = FB_MODE_IS_DETAILED;
-			clocks = (mode->left_margin + mode->xres + mode->right_margin + mode->hsync_len) *
-				(mode->upper_margin + mode->yres + mode->lower_margin + mode->vsync_len);
-			mode->refresh = (PICOS2KHZ(mode->pixclock) * 1000) / clocks;
-			return true;
 		}
 	}
 
-	return false;
+	clocks = (mode->left_margin + mode->xres + mode->right_margin
+		+ mode->hsync_len) *
+		(mode->upper_margin + mode->yres + mode->lower_margin
+		+ mode->vsync_len);
+	if (clocks)
+		mode->refresh = (PICOS2KHZ(mode->pixclock) * 1000) / clocks;
+
+	dc_mode.pclk = PICOS2KHZ(mode->pixclock) * 1000;
+	dc_mode.h_active = mode->xres;
+	dc_mode.v_active = mode->yres;
+
+	if (tegra_dc_check_best_rate(&dc_mode) > 0)
+		mode_supported = true;
+
+	pr_info("\t%dx%d-%d (pclk=%d) -> %s\n",
+		dc_mode.h_active, dc_mode.v_active,
+		mode->refresh, dc_mode.pclk,
+		mode_supported ? "supported" : "rejected");
+
+	return mode_supported;
 }
 
 
@@ -463,6 +487,7 @@ static bool tegra_dc_hdmi_detect(struct tegra_dc *dc)
 	hdmi->dvi = !(specs.misc & FB_MISC_HDMI);
 
 	tegra_fb_update_monspecs(dc->fb, &specs, tegra_dc_hdmi_mode_filter);
+
 	dev_info(&dc->ndev->dev, "display detected\n");
 
 	dc->connected = true;
@@ -954,6 +979,9 @@ static void tegra_dc_hdmi_enable(struct tegra_dc *dc)
 	int rekey;
 	int err;
 	unsigned long val;
+
+	pr_info("HDMI out enable: %dx%d (pclk=%d)\n",
+		dc->mode.h_active, dc->mode.v_active, dc->mode.pclk);
 
 	/* enbale power, clocks, resets, etc. */
 

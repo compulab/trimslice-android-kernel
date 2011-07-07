@@ -792,8 +792,9 @@ static unsigned long tegra_dc_pclk_round_rate(struct tegra_dc *dc, int pclk)
 {
 	unsigned long rate;
 	unsigned long div;
+        struct clk *pll_d_clk = clk_get_sys(NULL, "pll_d");
 
-	rate = clk_get_rate(dc->clk);
+	rate = clk_get_rate(pll_d_clk);
 
 	div = DIV_ROUND_CLOSEST(rate * 2, pclk);
 
@@ -801,6 +802,55 @@ static unsigned long tegra_dc_pclk_round_rate(struct tegra_dc *dc, int pclk)
 		return 0;
 
 	return rate * 2 / div;
+}
+
+unsigned long pll_d_rates[] = {
+	216000000,
+	252000000,
+	594000000,
+	1000000000
+};
+
+int tegra_dc_check_best_rate(struct tegra_dc_mode *mode)
+{
+	int pclk,pclk_best=0;
+	unsigned long div;
+	unsigned long rate, rate_best=pll_d_rates[0];
+	int i;
+
+	/* sanity check for EDID data */
+	if (mode->pclk == 0)
+		return 0;
+
+	for (i=0; i < ARRAY_SIZE(pll_d_rates); i++)
+	{
+		rate = pll_d_rates[i];
+		div = DIV_ROUND_CLOSEST(rate * 2,mode-> pclk);
+		if (div < 2)
+			return 0;
+		pclk = rate * 2 /div;
+
+		if (pclk <= mode->pclk && pclk > pclk_best) {
+			rate_best = rate;
+			pclk_best = pclk;
+		} else if( pclk >  mode->pclk && pclk < pclk_best) {
+			rate_best = rate;
+			pclk_best = pclk;
+		}
+	}
+
+	rate = rate_best;
+	pclk = pclk_best;
+
+	div = (rate * 2 / pclk) - 2;
+
+	/* request -1/+9% accuracy for pixel clock */
+	if (pclk < (mode->pclk / 100 * 99) ||
+	    pclk > (mode->pclk / 100 * 109)) {
+		return 0;
+	}
+	return rate;
+
 }
 
 void tegra_dc_setup_clk(struct tegra_dc *dc, struct clk *clk)
@@ -813,10 +863,7 @@ void tegra_dc_setup_clk(struct tegra_dc *dc, struct clk *clk)
 	struct clk *pll_d_clk =
 		clk_get_sys(NULL, "pll_d");
 
-	if (dc->mode.pclk > 30000000)
-		rate = 594000000;
-	else
-		rate = 216000000;
+	rate = tegra_dc_check_best_rate(&dc->mode);
 
 	if (rate != clk_get_rate(pll_d_clk))
 		clk_set_rate(pll_d_clk, rate);
@@ -826,7 +873,6 @@ void tegra_dc_setup_clk(struct tegra_dc *dc, struct clk *clk)
 
 	pclk = tegra_dc_pclk_round_rate(dc, dc->mode.pclk);
 	tegra_dvfs_set_rate(clk, pclk);
-
 }
 
 static int tegra_dc_program_mode(struct tegra_dc *dc, struct tegra_dc_mode *mode)
@@ -882,6 +928,7 @@ static int tegra_dc_program_mode(struct tegra_dc *dc, struct tegra_dc_mode *mode
 	rate = clk_get_rate(dc->clk);
 
 	pclk = tegra_dc_pclk_round_rate(dc, mode->pclk);
+
 	if (pclk < (mode->pclk / 100 * 99) ||
 	    pclk > (mode->pclk / 100 * 109)) {
 		dev_err(&dc->ndev->dev,
@@ -1210,16 +1257,13 @@ static void tegra_dc_init(struct tegra_dc *dc)
 		dc->syncpt[i].min = dc->syncpt[i].max =
 			nvhost_syncpt_read(&dc->ndev->host->syncpt, syncpt);
 	}
-
 	if (dc->mode.pclk)
 		tegra_dc_program_mode(dc, &dc->mode);
+
 }
 
 static bool _tegra_dc_enable(struct tegra_dc *dc)
 {
-	if (dc->mode.pclk == 0)
-		return false;
-
 	tegra_dc_io_start(dc);
 
 	if (dc->out && dc->out->enable)
