@@ -807,9 +807,10 @@ static int tegra_dc_hdmi_setup_audio(struct tegra_dc *dc, unsigned audio_freq)
 	config = tegra_hdmi_get_audio_config(audio_freq, dc->mode.pclk);
 	if (!config) {
 		dev_err(&dc->ndev->dev,
-			"hdmi: can't set audio to %d at %d pix_clock",
+			"hdmi: can't set audio to %d at %d pix_clock; \n" \
+			"\thdmi audio won't be supported for this display",
 			audio_freq, dc->mode.pclk);
-		return -EINVAL;
+		return 0;
 	}
 
 	tegra_hdmi_writel(hdmi, 0, HDMI_NV_PDISP_HDMI_ACR_CTRL);
