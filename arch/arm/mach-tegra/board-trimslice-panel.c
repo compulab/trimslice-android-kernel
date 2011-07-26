@@ -1,7 +1,7 @@
 /*
  * arch/arm/mach-tegra/board-trimslice-panel.c
  *
- * Copyright (c) 2010, NVIDIA Corporation.
+ * Copyright (c) 2010, 2011, NVIDIA Corporation.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -215,6 +215,37 @@ static struct platform_device *trimslice_gfx_devices[] __initdata = {
 	&tegra_pwfm2_device,
 };
 
+static int  tegra_default_dvi_mode = 0;
+static int  tegra_default_hdmi_mode = 0;
+
+static int __init tegra_default_dvi_mode_setup(char *options)
+{
+	if (!strcmp(options, "test"))
+		tegra_default_dvi_mode = 1;
+	else if (!strcmp(options, "720p"))
+		tegra_default_dvi_mode = 2;
+	else
+		tegra_default_dvi_mode = 0;
+	return 0;
+}
+__setup("dvi=", tegra_default_dvi_mode_setup);
+
+static int __init tegra_default_hdmi_mode_setup(char *options)
+{
+	if (!strcmp(options, "test"))
+		tegra_default_hdmi_mode = 1;
+	else if (!strcmp(options, "720p"))
+		tegra_default_hdmi_mode = 2;
+	else if (!strcmp(options, "1080p"))
+		tegra_default_hdmi_mode = 3;
+	else
+		tegra_default_hdmi_mode = 0;
+	return 0;
+}
+__setup("hdmi=", tegra_default_hdmi_mode_setup);
+
+
+
 int __init trimslice_panel_init(void)
 {
 	int err;
@@ -240,6 +271,13 @@ int __init trimslice_panel_init(void)
 		(struct device *) &trimslice_disp2_device;
 	trimslice_disp2_device.dev_neighbour
 		= (struct device *) &trimslice_disp1_device;
+
+	((struct tegra_dc_platform_data*)
+		(trimslice_disp1_device.dev.platform_data))->default_mode =
+		tegra_default_dvi_mode;
+	((struct tegra_dc_platform_data*)
+		(trimslice_disp2_device.dev.platform_data))->default_mode =
+		tegra_default_hdmi_mode;
 
 	if (!err)
 		err = nvhost_device_register(&trimslice_disp1_device);

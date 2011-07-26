@@ -129,6 +129,9 @@ static bool tegra_dc_rgb_mode_filter(struct tegra_dc *dc, struct fb_videomode *m
 	return mode_supported;
 }
 
+extern void tegra_dc_create_default_monspecs(int default_mode,
+					struct fb_monspecs *specs);
+
 static void tegra_dc_rgb_detect(struct tegra_dc *dc)
 {
 	struct fb_monspecs specs;
@@ -138,9 +141,16 @@ static void tegra_dc_rgb_detect(struct tegra_dc *dc)
 		goto fail;
 
 	err = tegra_edid_get_monspecs(dc->edid, &specs);
-	if (err < 0) {
+
+	if (err < 0 && !dc->pdata->default_mode) {
 		dev_err(&dc->ndev->dev, "error reading edid\n");
 		goto fail;
+	}else if (dc->pdata->default_mode) {
+
+		dev_info(&dc->ndev->dev,"ignore EDID data, using the default " \
+			"DVI resolutions");
+		tegra_dc_create_default_monspecs(dc->pdata->default_mode,
+						&specs);
 	}
 
 	/* monitors like to lie about these but they are still useful for

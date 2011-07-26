@@ -1,4 +1,5 @@
 obj-y += dc.o
+obj-y += default.o
 obj-y += rgb.o
 obj-y += hdmi.o
 obj-y += nvhdcp.o

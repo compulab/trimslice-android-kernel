@@ -1,7 +1,7 @@
 /*
  * drivers/video/tegra/dc/hdmi.c
  *
- * Copyright (C) 2010 Google, Inc.
+ * Copyright (C) 2010, 2011 Google, Inc.
  * Author: Erik Gilling <konkers@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -66,6 +66,7 @@ struct tegra_dc_hdmi_data {
 };
 
 const struct fb_videomode tegra_dc_hdmi_supported_modes[] = {
+
 	/* 1280x720p 60hz: EIA/CEA-861-B Format 4 */
 	{
 		.xres =		1280,
@@ -125,7 +126,6 @@ const struct fb_videomode tegra_dc_hdmi_supported_modes[] = {
 		.vmode =	FB_VMODE_NONINTERLACED,
 		.sync = 0,
 	},
-
 	/* 1920x1080p 59.94/60hz EIA/CEA-861-B Format 16 */
 	{
 		.xres =		1920,
@@ -463,6 +463,9 @@ static bool tegra_dc_hdmi_hpd(struct tegra_dc *dc)
 		(sense == TEGRA_DC_OUT_HOTPLUG_LOW && !level);
 }
 
+extern void tegra_dc_create_default_monspecs(int default_mode,
+					struct fb_monspecs *specs);
+
 static bool tegra_dc_hdmi_detect(struct tegra_dc *dc)
 {
 	struct tegra_dc_hdmi_data *hdmi = tegra_dc_get_outdata(dc);
@@ -474,9 +477,16 @@ static bool tegra_dc_hdmi_detect(struct tegra_dc *dc)
 		goto fail;
 
 	err = tegra_edid_get_monspecs(dc->edid, &specs);
-	if (err < 0) {
+
+	if (err < 0 && !dc->pdata->default_mode) {
 		dev_err(&dc->ndev->dev, "error reading edid\n");
 		goto fail;
+	}else if (dc->pdata->default_mode) {
+
+		dev_info(&dc->ndev->dev,"ignore EDID data, using the default " \
+			"HDMI resolutions");
+		tegra_dc_create_default_monspecs(dc->pdata->default_mode,
+						&specs);
 	}
 
 	/* monitors like to lie about these but they are still useful for
@@ -496,6 +506,7 @@ static bool tegra_dc_hdmi_detect(struct tegra_dc *dc)
 	/* Notify RGB dc of HDMI dc presence and its PLL_D selection.
 	 * We want to give priority for HDMI as it can generate 1080p resolution
 	 */
+
         rgb_dc = (struct tegra_dc *)nvhost_get_drvdata (
 		(struct nvhost_device *)dc->ndev->dev_neighbour);
 
