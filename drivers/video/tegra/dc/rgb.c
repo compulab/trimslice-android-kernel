@@ -17,6 +17,8 @@
 
 #include <linux/kernel.h>
 #include <linux/fb.h>
+#include <linux/seq_file.h>
+#include <linux/debugfs.h>
 
 #include <mach/dc.h>
 #include <mach/fb.h>
@@ -25,6 +27,7 @@
 #include "dc_priv.h"
 
 #include "edid.h"
+#include "tegra_dc_res.h"
 
 static const u32 tegra_dc_rgb_enable_pintable[] = {
 	DC_COM_PIN_OUTPUT_ENABLE0,	0x00000000,
@@ -92,6 +95,7 @@ extern int tegra_dc_check_best_rate(struct tegra_dc_mode *mode);
 
 #define LCD_MAX_HORIZONTAL_RESOLUTION 1680
 #define LCD_MAX_VERTICAL_RESOLUTION 1050
+#define LCD_MIN_REFRESH_RATE 50
 
 static bool tegra_dc_rgb_mode_filter(struct tegra_dc *dc, struct fb_videomode *mode)
 {
@@ -110,15 +114,18 @@ static bool tegra_dc_rgb_mode_filter(struct tegra_dc *dc, struct fb_videomode *m
 	if (clocks)
 		mode->refresh = (PICOS2KHZ(mode->pixclock) * 1000) / clocks;
 
+	if (mode->refresh < LCD_MIN_REFRESH_RATE)
+		return false;
+
 	dc_mode.pclk = PICOS2KHZ(mode->pixclock) * 1000;
 	dc_mode.h_active = mode->xres;
 	dc_mode.v_active = mode->yres;
 
-	if (tegra_dc_check_pll_rate(dc, &dc_mode) >0 )
+	if (tegra_dc_check_pll_rate(dc, &dc_mode) > 0)
 		mode_supported = true;
 
 	if (mode->xres > LCD_MAX_HORIZONTAL_RESOLUTION ||
-		mode->yres > LCD_MAX_VERTICAL_RESOLUTION )
+		mode->yres > LCD_MAX_VERTICAL_RESOLUTION)
 		mode_supported = false;
 
 	pr_info("\t%dx%d-%d (pclk=%d) -> %s\n",
@@ -131,6 +138,85 @@ static bool tegra_dc_rgb_mode_filter(struct tegra_dc *dc, struct fb_videomode *m
 
 extern void tegra_dc_create_default_monspecs(int default_mode,
 					struct fb_monspecs *specs);
+
+typedef struct {
+	unsigned int c;
+	struct {
+		u32 refresh;
+		u32 xres;
+		u32 yres;
+	} res[32];
+} resolutions_t;
+
+static int rgb_diagnostics(struct seq_file *s, void *data)
+{
+	int i = 0;
+	resolutions_t *resolutions = s->private;
+	for (i = 0 ; i < resolutions->c ; i++) {
+		seq_printf(s, "%d %d %d\n", resolutions->res[i].xres,
+					resolutions->res[i].yres,
+					resolutions->res[i].refresh);
+	}
+	return 0;
+}
+
+static int rgb_diagnostics_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, rgb_diagnostics, inode->i_private);
+}
+
+static const struct file_operations rgb_debug_fops = {
+	.open		= rgb_diagnostics_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+static int setup_read(struct seq_file *s, void *data)
+{
+	static char setup_buffer[] = {TEGRA_DC_RES};
+	seq_printf(s, "%s", &setup_buffer[0]);
+	return 0;
+}
+
+static int setup_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, setup_read, inode->i_private);
+}
+
+static const struct file_operations setup_debug_fops = {
+	.open		= setup_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+void tegra_rgb_update_debugfs(struct tegra_dc *dc, struct fb_monspecs *specs)
+{
+	int i;
+	static resolutions_t resolutions = { .c = 0 };
+	struct dentry *debug_dir = NULL;
+	struct dentry *debug_file = NULL;
+
+	debug_file = debugfs_create_file("tegra_dc_res", S_IRUSR|S_IRGRP|S_IXUSR|S_IXGRP,
+				debug_dir, NULL, &setup_debug_fops);
+
+	debug_file = debugfs_create_file("tegra_dc_rgb_res", S_IRUSR|S_IRGRP,
+				debug_dir, &resolutions, &rgb_debug_fops);
+
+	resolutions.c = 0;
+	for (i = 0; i < specs->modedb_len; i++) {
+		struct fb_videomode *mode = &specs->modedb[i];
+		if (tegra_dc_rgb_mode_filter(dc, mode)) {
+			if (resolutions.c < 32) {
+				resolutions.res[resolutions.c].refresh = mode->refresh;
+				resolutions.res[resolutions.c].xres = mode->xres;
+				resolutions.res[resolutions.c].yres = mode->yres;
+				resolutions.c++;
+			}
+		}
+	}
+}
 
 static void tegra_dc_rgb_detect(struct tegra_dc *dc)
 {
@@ -145,9 +231,9 @@ static void tegra_dc_rgb_detect(struct tegra_dc *dc)
 	if (err < 0 && !dc->pdata->default_mode) {
 		dev_err(&dc->ndev->dev, "error reading edid\n");
 		goto fail;
-	}else if (dc->pdata->default_mode) {
+	} else if (dc->pdata->default_mode) {
 
-		dev_info(&dc->ndev->dev,"ignore EDID data, using the default " \
+		dev_info(&dc->ndev->dev, "ignore EDID data, using the default " \
 			"DVI resolutions");
 		tegra_dc_create_default_monspecs(dc->pdata->default_mode,
 						&specs);
@@ -160,6 +246,7 @@ static void tegra_dc_rgb_detect(struct tegra_dc *dc)
 	dc->out->v_size = specs.max_y * 1000;
 
 	tegra_fb_update_monspecs(dc->fb, &specs, tegra_dc_rgb_mode_filter);
+	tegra_rgb_update_debugfs(dc, &specs);
 	dev_info(&dc->ndev->dev, "display detected\n");
 
 	dc->connected = true;
