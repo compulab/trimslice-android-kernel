@@ -938,11 +938,8 @@ int cfhsi_probe(struct platform_device *pdev)
 	int res;
 
 	ndev = alloc_netdev(sizeof(struct cfhsi), "cfhsi%d", cfhsi_setup);
-	if (!ndev) {
-		dev_err(&pdev->dev, "%s: alloc_netdev failed.\n",
-			__func__);
+	if (!ndev)
 		return -ENODEV;
-	}
 
 	cfhsi = netdev_priv(ndev);
 	cfhsi->ndev = ndev;
@@ -970,8 +967,6 @@ int cfhsi_probe(struct platform_device *pdev)
 	 */
 	cfhsi->tx_buf = kzalloc(CFHSI_BUF_SZ_TX, GFP_KERNEL);
 	if (!cfhsi->tx_buf) {
-		dev_err(&ndev->dev, "%s: Failed to allocate TX buffer.\n",
-			__func__);
 		res = -ENODEV;
 		goto err_alloc_tx;
 	}
@@ -982,8 +977,6 @@ int cfhsi_probe(struct platform_device *pdev)
 	 */
 	cfhsi->rx_buf = kzalloc(CFHSI_BUF_SZ_RX, GFP_KERNEL);
 	if (!cfhsi->rx_buf) {
-		dev_err(&ndev->dev, "%s: Failed to allocate RX buffer.\n",
-			__func__);
 		res = -ENODEV;
 		goto err_alloc_rx;
 	}
