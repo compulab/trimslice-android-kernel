@@ -209,7 +209,7 @@ static const struct tegra_pingroup_config i2c1_ddc = {
 static struct tegra_i2c_platform_data trimslice_i2c1_platform_data = {
         .adapter_nr     = 0,
         .bus_count      = 1,
-	.bus_clk_rate   = { 400000, 0 },
+	.bus_clk_rate   = { 100000, 0 },
 	.bus_mux	= { &i2c1_ddc, 0 },
         .bus_mux_len    = { 1, 1 },
 };
