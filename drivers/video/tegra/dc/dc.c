@@ -807,6 +807,8 @@ static unsigned long tegra_dc_pclk_round_rate(struct tegra_dc *dc, int pclk)
 unsigned long pll_d_rates[] = {
 	216000000,
 	252000000,
+	318000000,
+	460000000,
 	594000000,
 	1000000000
 };
