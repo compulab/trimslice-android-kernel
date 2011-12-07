@@ -286,7 +286,7 @@ static int tegra_pm_irq_syscore_suspend(void)
 	/* Clear PMC Wake Status register while going to suspend */
 	temp = readl(pmc + PMC_WAKE_STATUS);
 	if (temp)
-		pmc_32kwritel(temp, pmc + PMC_WAKE_STATUS);
+		pmc_32kwritel(temp, PMC_WAKE_STATUS);
 
 	write_pmc_wake_level(wake_level);
 
