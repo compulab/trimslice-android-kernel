@@ -281,8 +281,6 @@ static void tegra2_idle_lp2_cpu_1(struct cpuidle_device *dev,
 	tegra_cpu1_wake_by_time = ktime_to_us(ktime_get()) + request;
 	smp_wmb();
 
-	clockevents_notify(CLOCK_EVT_NOTIFY_BROADCAST_ENTER, &dev->cpu);
-
 	tegra_twd_suspend(&twd_context);
 
 	tegra2_sleep_wfi(PLAT_PHYS_OFFSET - PAGE_OFFSET);
@@ -292,8 +290,6 @@ static void tegra2_idle_lp2_cpu_1(struct cpuidle_device *dev,
 	tegra_cpu1_wake_by_time = LLONG_MAX;
 
 	tegra_twd_resume(&twd_context);
-
-	clockevents_notify(CLOCK_EVT_NOTIFY_BROADCAST_EXIT, &dev->cpu);
 #endif
 }
 
