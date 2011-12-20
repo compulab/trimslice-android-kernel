@@ -50,6 +50,7 @@
 #include <mach/io.h>
 #include <mach/i2s.h>
 #include <mach/tegra_wm8903_pdata.h>
+#include <mach/tegra_rt5640_pdata.h>
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <mach/usb_phy.h>
@@ -281,10 +282,16 @@ static struct wm8903_platform_data cardhu_wm8903_pdata = {
 	},
 };
 
-static struct i2c_board_info __initdata wm8903_board_info = {
-	I2C_BOARD_INFO("wm8903", 0x1a),
-	.platform_data = &cardhu_wm8903_pdata,
-	.irq = TEGRA_GPIO_TO_IRQ(TEGRA_GPIO_CDC_IRQ),
+static struct i2c_board_info __initdata cardhu_codec_info[] = {
+	{
+		I2C_BOARD_INFO("wm8903", 0x1a),
+		.irq = TEGRA_GPIO_TO_IRQ(TEGRA_GPIO_CDC_IRQ),
+		.platform_data = &cardhu_wm8903_pdata,
+	},
+	{
+		 I2C_BOARD_INFO("rt5640", 0x1c),
+		.irq = TEGRA_GPIO_TO_IRQ(TEGRA_GPIO_CDC_IRQ),
+	},
 };
 
 static void cardhu_i2c_init(void)
@@ -301,7 +308,8 @@ static void cardhu_i2c_init(void)
 	platform_device_register(&tegra_i2c_device2);
 	platform_device_register(&tegra_i2c_device1);
 
-	i2c_register_board_info(4, &wm8903_board_info, 1);
+	i2c_register_board_info(4, cardhu_codec_info,
+					ARRAY_SIZE(cardhu_codec_info));
 	i2c_register_board_info(2, cardhu_i2c_bus3_board_info, 1);
 }
 
@@ -541,11 +549,28 @@ static struct tegra_wm8903_platform_data cardhu_audio_pdata = {
 	.gpio_ext_mic_en	= -1,
 };
 
-static struct platform_device cardhu_audio_device = {
-	.name	= "tegra-snd-wm8903",
-	.id	= 0,
-	.dev	= {
-		.platform_data  = &cardhu_audio_pdata,
+static struct tegra_rt5640_platform_data cardhu_audio_rt5640_pdata = {
+	.gpio_spkr_en		= -1,
+	.gpio_hp_det		= TEGRA_GPIO_HP_DET,
+	.gpio_hp_mute		= -1,
+	.gpio_int_mic_en	= -1,
+	.gpio_ext_mic_en	= -1,
+};
+
+static struct platform_device cardhu_audio_device[] = {
+	{
+		.name	= "tegra-snd-wm8903",
+		.id	= 0,
+		.dev	= {
+				.platform_data = &cardhu_audio_pdata,
+			  }
+	},
+	{
+		.name	= "tegra-snd-rt5640",
+		.id	= 0,
+		.dev	= {
+				.platform_data = &cardhu_audio_rt5640_pdata,
+			  }
 	},
 };
 
@@ -575,7 +600,8 @@ static struct platform_device *cardhu_devices[] __initdata = {
 	&bluetooth_dit_device,
 	&cardhu_bcm4329_rfkill_device,
 	&tegra_pcm_device,
-	&cardhu_audio_device,
+	&cardhu_audio_device[0],
+	&cardhu_audio_device[1],
 	&tegra_hda_device,
 #if defined(CONFIG_CRYPTO_DEV_TEGRA_AES)
 	&tegra_aes_device,
