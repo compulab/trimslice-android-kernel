@@ -152,6 +152,7 @@ struct mmc_card {
 #define MMC_STATE_HIGHSPEED_DDR (1<<4)		/* card is in high speed mode */
 #define MMC_STATE_DOING_BKOPS	(1 << 5)	/* Card doing bkops */
 #define MMC_STATE_NEED_BKOPS	(1 << 6)	/* Card needs to do bkops */
+#define MMC_STATE_ULTRAHIGHSPEED (1 << 7)	/* Card is in UHS mode */
 
 	unsigned int		quirks; 	/* card quirks */
 #define MMC_QUIRK_LENIENT_FN0	(1<<0)		/* allow SDIO FN0 writes outside of the VS CCCR range */
