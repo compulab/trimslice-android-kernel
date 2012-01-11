@@ -32,7 +32,6 @@
 #include <linux/slab.h>
 #include <linux/i2c-tegra.h>
 #include <linux/spinlock.h>
-#include <linux/pm_runtime.h>
 
 #include <asm/unaligned.h>
 
@@ -400,7 +399,8 @@ static int tegra_i2c_init(struct tegra_i2c_dev *i2c_dev)
 	u32 val;
 	int err = 0;
 
-	pm_runtime_get_sync(i2c_dev->dev);
+	if (!i2c_dev->is_clkon_always)
+		clk_enable(i2c_dev->clk);
 
 	/* Interrupt generated before sending stop signal so
 	* wait for some time so that stop signal can be send proerly */
@@ -428,7 +428,8 @@ static int tegra_i2c_init(struct tegra_i2c_dev *i2c_dev)
 	if (tegra_i2c_flush_fifos(i2c_dev))
 		err = -ETIMEDOUT;
 
-	pm_runtime_put_sync(i2c_dev->dev);
+	if (!i2c_dev->is_clkon_always)
+		clk_disable(i2c_dev->clk);
 
 	if (i2c_dev->irq_disabled) {
 		i2c_dev->irq_disabled = 0;
@@ -703,7 +704,8 @@ static int tegra_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
 	i2c_dev->msgs = msgs;
 	i2c_dev->msgs_num = num;
 
-	pm_runtime_get_sync(i2c_dev->dev);
+	if (!i2c_dev->is_clkon_always)
+		clk_enable(i2c_dev->clk);
 
 	for (i = 0; i < num; i++) {
 		int stop = (i == (num - 1)) ? 1  : 0;
@@ -713,7 +715,8 @@ static int tegra_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
 	}
 
 
-	pm_runtime_put_sync(i2c_dev->dev);
+	if (!i2c_dev->is_clkon_always)
+		clk_disable(i2c_dev->clk);
 
 	rt_mutex_unlock(&i2c_dev->dev_lock);
 
@@ -821,10 +824,8 @@ static int tegra_i2c_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, i2c_dev);
 
-	pm_runtime_enable(i2c_dev->dev);
-
 	if (i2c_dev->is_clkon_always)
-		pm_runtime_forbid(i2c_dev->dev);
+		clk_enable(i2c_dev->clk);
 
 	ret = tegra_i2c_init(i2c_dev);
 	if (ret) {
@@ -899,9 +900,7 @@ static int tegra_i2c_remove(struct platform_device *pdev)
 		i2c_del_adapter(&i2c_dev->busses[i2c_dev->bus_count].adapter);
 
 	if (i2c_dev->is_clkon_always)
-		pm_runtime_allow(i2c_dev->dev);
-
-	pm_runtime_disable(i2c_dev->dev);
+		clk_disable(i2c_dev->clk);
 
 	free_irq(i2c_dev->irq, i2c_dev);
 	clk_put(i2c_dev->clk);
@@ -922,7 +921,7 @@ static int tegra_i2c_suspend_noirq(struct device *dev)
 
 	i2c_dev->is_suspended = true;
 	if (i2c_dev->is_clkon_always)
-		pm_runtime_allow(i2c_dev->dev);
+		clk_disable(i2c_dev->clk);
 
 	rt_mutex_unlock(&i2c_dev->dev_lock);
 
@@ -938,7 +937,7 @@ static int tegra_i2c_resume_noirq(struct device *dev)
 	rt_mutex_lock(&i2c_dev->dev_lock);
 
 	if (i2c_dev->is_clkon_always)
-		pm_runtime_forbid(i2c_dev->dev);
+		clk_enable(i2c_dev->clk);
 
 	ret = tegra_i2c_init(i2c_dev);
 
@@ -954,33 +953,10 @@ static int tegra_i2c_resume_noirq(struct device *dev)
 	return 0;
 }
 
-static int tegra_i2c_runtime_idle(struct device *dev)
-{
-	struct platform_device *pdev = to_platform_device(dev);
-	struct tegra_i2c_dev *i2c_dev = platform_get_drvdata(pdev);
-
-	clk_disable(i2c_dev->clk);
-
-	return 0;
-}
-
-static int tegra_i2c_runtime_resume(struct device *dev)
-{
-	struct platform_device *pdev = to_platform_device(dev);
-	struct tegra_i2c_dev *i2c_dev = platform_get_drvdata(pdev);
-
-	clk_enable(i2c_dev->clk);
-
-	return 0;
-}
-
 static const struct dev_pm_ops tegra_i2c_dev_pm_ops = {
 	.suspend_noirq = tegra_i2c_suspend_noirq,
 	.resume_noirq = tegra_i2c_resume_noirq,
-	.runtime_idle = tegra_i2c_runtime_idle,
-	.runtime_resume = tegra_i2c_runtime_resume,
 };
-
 #define TEGRA_I2C_DEV_PM_OPS (&tegra_i2c_dev_pm_ops)
 #else
 #define TEGRA_I2C_DEV_PM_OPS NULL
