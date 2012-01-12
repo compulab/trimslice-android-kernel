@@ -52,6 +52,8 @@ int enterprise_suspend_init(void);
 int enterprise_edp_init(void);
 void __init enterprise_tsensor_init(void);
 void enterprise_bpc_mgmt_init(void);
+int tegra_baseband_rail_on(void);
+int tegra_baseband_rail_off(void);
 
 /* Invensense MPU Definitions */
 #define MPU_GYRO_NAME		"mpu3050"

@@ -111,6 +111,7 @@ static struct regulator_consumer_supply tps80031_vana_supply[] = {
 
 static struct regulator_consumer_supply tps80031_ldo1_supply[] = {
 	REGULATOR_SUPPLY("avdd_dsi_csi", NULL),
+	REGULATOR_SUPPLY("avdd_hsic", NULL),
 	REGULATOR_SUPPLY("pwrdet_mipi", NULL),
 };
 

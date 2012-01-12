@@ -32,6 +32,7 @@
 #include <linux/pm_runtime.h>
 #include <mach/usb_phy.h>
 #include "board.h"
+#include "board-enterprise.h"
 #include "devices.h"
 #include "gpio-names.h"
 #include "baseband-xmm-power.h"
@@ -147,6 +148,8 @@ static int baseband_xmm_power_on(struct platform_device *device)
 	if (baseband_xmm_powerstate != BBXMM_PS_UNINIT)
 		return -EINVAL;
 
+	tegra_baseband_rail_on();
+
 	/* reset the state machine */
 	baseband_xmm_powerstate = BBXMM_PS_INIT;
 	modem_sleep_flag = false;
@@ -246,6 +249,8 @@ static int baseband_xmm_power_off(struct platform_device *device)
 	spin_unlock_irqrestore(&xmm_lock, flags);
 	/* start registration process once again on xmm on */
 	register_hsic_device = true;
+
+	tegra_baseband_rail_off();
 	pr_debug("%s }\n", __func__);
 
 	return 0;
@@ -359,6 +364,9 @@ void baseband_xmm_set_power_status(unsigned int status)
 			wake_unlock(&wakelock);
 		}
 		gpio_set_value(data->modem.xmm.ipc_hsic_active, 0);
+		/* do this only from L2 state (going to suspend) */
+		if (baseband_xmm_powerstate == BBXMM_PS_L2)
+			tegra_baseband_rail_off();
 		pr_debug("gpio host active low->\n");
 		break;
 	case BBXMM_PS_L2TOL0:
@@ -368,6 +376,12 @@ void baseband_xmm_set_power_status(unsigned int status)
 			pr_debug("BB XMM POWER STATE = %d\n", status);
 			baseband_xmm_power_L2_resume();
 		}
+		break;
+	case BBXMM_PS_L3TOL0:
+		/* poweron rail for L3 -> L0 (system resume) */
+		pr_debug("BB XMM L3 -> L0, turning on power rail.\n");
+		tegra_baseband_rail_on();
+		break;
 	default:
 		break;
 	}
