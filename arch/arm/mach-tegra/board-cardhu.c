@@ -283,12 +283,15 @@ static struct wm8903_platform_data cardhu_wm8903_pdata = {
 	},
 };
 
-static struct i2c_board_info __initdata cardhu_codec_info[] = {
+static struct i2c_board_info __initdata cardhu_codec_wm8903_info[] = {
 	{
 		I2C_BOARD_INFO("wm8903", 0x1a),
 		.irq = TEGRA_GPIO_TO_IRQ(TEGRA_GPIO_CDC_IRQ),
 		.platform_data = &cardhu_wm8903_pdata,
 	},
+};
+
+static struct i2c_board_info __initdata cardhu_codec_rt5640_info[] = {
 	{
 		 I2C_BOARD_INFO("rt5640", 0x1c),
 		.irq = TEGRA_GPIO_TO_IRQ(TEGRA_GPIO_CDC_IRQ),
@@ -297,6 +300,10 @@ static struct i2c_board_info __initdata cardhu_codec_info[] = {
 
 static void cardhu_i2c_init(void)
 {
+	struct board_info pmu_board_info;
+
+	tegra_get_pmu_board_info(&pmu_board_info);
+
 	tegra_i2c_device1.dev.platform_data = &cardhu_i2c1_platform_data;
 	tegra_i2c_device2.dev.platform_data = &cardhu_i2c2_platform_data;
 	tegra_i2c_device3.dev.platform_data = &cardhu_i2c3_platform_data;
@@ -309,8 +316,14 @@ static void cardhu_i2c_init(void)
 	platform_device_register(&tegra_i2c_device2);
 	platform_device_register(&tegra_i2c_device1);
 
-	i2c_register_board_info(4, cardhu_codec_info,
-					ARRAY_SIZE(cardhu_codec_info));
+	i2c_register_board_info(4, cardhu_codec_wm8903_info, 1);
+
+	/* Don't register ALC5640 device if there is MAX77663 PMU on system,
+	 * because MAX77663 PMU and ALC5640 Audio Codec are using same i2c addr
+	 * on same i2c bus. */
+	if (pmu_board_info.board_id != BOARD_PMU_PM298)
+		i2c_register_board_info(4, cardhu_codec_rt5640_info, 1);
+
 	i2c_register_board_info(2, cardhu_i2c_bus3_board_info, 1);
 }
 
@@ -552,7 +565,7 @@ static struct platform_device tegra_rtc_device = {
 	.num_resources = ARRAY_SIZE(tegra_rtc_resources),
 };
 
-static struct tegra_wm8903_platform_data cardhu_audio_pdata = {
+static struct tegra_wm8903_platform_data cardhu_audio_wm8903_pdata = {
 	.gpio_spkr_en		= TEGRA_GPIO_SPKR_EN,
 	.gpio_hp_det		= TEGRA_GPIO_HP_DET,
 	.gpio_hp_mute		= -1,
@@ -568,20 +581,19 @@ static struct tegra_rt5640_platform_data cardhu_audio_rt5640_pdata = {
 	.gpio_ext_mic_en	= -1,
 };
 
-static struct platform_device cardhu_audio_device[] = {
-	{
-		.name	= "tegra-snd-wm8903",
-		.id	= 0,
-		.dev	= {
-				.platform_data = &cardhu_audio_pdata,
-			  }
+static struct platform_device cardhu_audio_wm8903_device = {
+	.name	= "tegra-snd-wm8903",
+	.id	= 0,
+	.dev	= {
+		.platform_data = &cardhu_audio_wm8903_pdata,
 	},
-	{
-		.name	= "tegra-snd-rt5640",
-		.id	= 0,
-		.dev	= {
-				.platform_data = &cardhu_audio_rt5640_pdata,
-			  }
+};
+
+static struct platform_device cardhu_audio_rt5640_device = {
+	.name	= "tegra-snd-rt5640",
+	.id	= 0,
+	.dev	= {
+		.platform_data = &cardhu_audio_rt5640_pdata,
 	},
 };
 
@@ -611,8 +623,7 @@ static struct platform_device *cardhu_devices[] __initdata = {
 	&bluetooth_dit_device,
 	&cardhu_bcm4329_rfkill_device,
 	&tegra_pcm_device,
-	&cardhu_audio_device[0],
-	&cardhu_audio_device[1],
+	&cardhu_audio_wm8903_device,
 	&tegra_hda_device,
 #if defined(CONFIG_CRYPTO_DEV_TEGRA_AES)
 	&tegra_aes_device,
@@ -996,6 +1007,10 @@ static void cardhu_sata_init(void) { }
 
 static void __init tegra_cardhu_init(void)
 {
+	struct board_info pmu_board_info;
+
+	tegra_get_pmu_board_info(&pmu_board_info);
+
 	tegra_thermal_init(&thermal_data);
 	tegra_clk_init_from_table(cardhu_clk_init_table);
 	cardhu_pinmux_init();
@@ -1008,6 +1023,13 @@ static void __init tegra_cardhu_init(void)
 	cardhu_uart_init();
 	cardhu_tsensor_init();
 	platform_add_devices(cardhu_devices, ARRAY_SIZE(cardhu_devices));
+
+	/* Don't register ALC5640 device if there is MAX77663 PMU on system,
+	 * because MAX77663 PMU and ALC5640 Audio Codec are using same i2c addr
+	 * on same i2c bus. */
+	if (pmu_board_info.board_id != BOARD_PMU_PM298)
+		platform_device_register(&cardhu_audio_rt5640_device);
+
 	tegra_ram_console_debug_init();
 	cardhu_sdhci_init();
 	cardhu_regulator_init();
