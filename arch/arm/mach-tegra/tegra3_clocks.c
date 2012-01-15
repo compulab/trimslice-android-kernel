@@ -339,7 +339,10 @@
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #define EARLY_SUSPEND_MIN_CPU_FREQ_IDX	0
 #define ACTIVE_MIN_CPU_FREQ_IDX		1
+#define SCLK_MIN_FREQ			12000000
 static struct cpufreq_frequency_table *selected_cpufreq_table;
+#else
+#define SCLK_MIN_FREQ			40000000
 #endif
 
 static bool tegra3_clk_is_parent_allowed(struct clk *c, struct clk *p);
@@ -2932,6 +2935,7 @@ static int tegra3_clk_shared_bus_update(struct clk *bus)
 			}
 		}
 	}
+
 	rate = min(max(rate, bw), ceiling);
 
 	old_rate = clk_get_rate_locked(bus);
@@ -3800,7 +3804,7 @@ static struct clk tegra_clk_sclk = {
 	.reg	= 0x28,
 	.ops	= &tegra_super_ops,
 	.max_rate = 334000000,
-	.min_rate = 40000000,
+	.min_rate = SCLK_MIN_FREQ,
 };
 
 static struct clk tegra_clk_virtual_cpu_g = {
@@ -3857,7 +3861,7 @@ static struct clk tegra_clk_hclk = {
 	.reg_shift	= 4,
 	.ops		= &tegra_bus_ops,
 	.max_rate       = 334000000,
-	.min_rate       = 40000000,
+	.min_rate       = SCLK_MIN_FREQ,
 };
 
 static struct clk tegra_clk_pclk = {
@@ -3868,7 +3872,7 @@ static struct clk tegra_clk_pclk = {
 	.reg_shift	= 0,
 	.ops		= &tegra_bus_ops,
 	.max_rate       = 167000000,
-	.min_rate       = 40000000,
+	.min_rate       = SCLK_MIN_FREQ,
 };
 
 static struct raw_notifier_head sbus_rate_change_nh;
@@ -4210,6 +4214,8 @@ struct clk tegra_list_clks[] = {
 	SHARED_CLK("mon.avp",	"tegra_actmon",		"avp",	&tegra_clk_sbus_cmplx, NULL, 0, 0),
 	SHARED_CLK("cap.sclk",	"cap_sclk",		NULL,	&tegra_clk_sbus_cmplx, NULL, 0, SHARED_CEILING),
 	SHARED_CLK("floor.sclk", "floor_sclk",		NULL,	&tegra_clk_sbus_cmplx, NULL, 0, 0),
+	SHARED_CLK("disp1.sclk", "tegradc.0",		"sclk",	&tegra_clk_sbus_cmplx, NULL, 0, 0),
+	SHARED_CLK("disp2.sclk", "tegradc.1",		"sclk",	&tegra_clk_sbus_cmplx, NULL, 0, 0),
 
 	SHARED_CLK("avp.emc",	"tegra-avp",		"emc",	&tegra_clk_emc, NULL, 0, 0),
 	SHARED_CLK("cpu.emc",	"cpu",			"emc",	&tegra_clk_emc, NULL, 0, 0),
@@ -4815,7 +4821,12 @@ static struct early_suspend tegra3_clk_early_suspender;
 
 static void tegra3_clk_early_suspend(struct early_suspend *h)
 {
+	struct clk *clk_disp1 = tegra_get_clock_by_name("disp1.sclk");
 	struct clk *cpu_clk_lp = &tegra_clk_virtual_cpu_lp;
+
+	if (clk_disp1)
+		clk_disable(clk_disp1);
+
 	cpu_clk_lp->min_rate =
 		selected_cpufreq_table[EARLY_SUSPEND_MIN_CPU_FREQ_IDX]
 		.frequency * 1000;
@@ -4823,7 +4834,12 @@ static void tegra3_clk_early_suspend(struct early_suspend *h)
 
 static void tegra3_clk_late_resume(struct early_suspend *h)
 {
+	struct clk *clk_disp1 = tegra_get_clock_by_name("disp1.sclk");
 	struct clk *cpu_clk_lp = &tegra_clk_virtual_cpu_lp;
+
+	if (clk_disp1)
+		clk_enable(clk_disp1);
+
 	cpu_clk_lp->min_rate =
 		selected_cpufreq_table[ACTIVE_MIN_CPU_FREQ_IDX]
 		.frequency * 1000;
