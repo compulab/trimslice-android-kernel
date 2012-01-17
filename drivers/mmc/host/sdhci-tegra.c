@@ -108,6 +108,8 @@ struct tegra_sdhci_host {
 	/* max clk supported by the platform */
 	unsigned int max_clk_limit;
 	struct tegra_io_dpd *dpd;
+	bool card_present;
+	bool is_rail_enabled;
 };
 
 static u32 tegra_sdhci_readl(struct sdhci_host *host, int reg)
@@ -287,6 +289,32 @@ static void sdhci_status_notify_cb(int card_present, void *dev_id)
 static irqreturn_t carddetect_irq(int irq, void *data)
 {
 	struct sdhci_host *sdhost = (struct sdhci_host *)data;
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(sdhost);
+	struct tegra_sdhci_host *tegra_host = pltfm_host->priv;
+	struct platform_device *pdev = to_platform_device(mmc_dev(sdhost->mmc));
+	struct tegra_sdhci_platform_data *plat;
+
+	plat = pdev->dev.platform_data;
+
+	tegra_host->card_present = (gpio_get_value(plat->cd_gpio) == 0);
+
+	if (tegra_host->card_present) {
+		if (!tegra_host->is_rail_enabled) {
+			if (tegra_host->vdd_slot_reg)
+				regulator_enable(tegra_host->vdd_slot_reg);
+			if (tegra_host->vdd_io_reg)
+				regulator_enable(tegra_host->vdd_io_reg);
+			tegra_host->is_rail_enabled = 1;
+		}
+	} else {
+		if (tegra_host->is_rail_enabled) {
+			if (tegra_host->vdd_io_reg)
+				regulator_disable(tegra_host->vdd_io_reg);
+			if (tegra_host->vdd_slot_reg)
+				regulator_disable(tegra_host->vdd_slot_reg);
+			tegra_host->is_rail_enabled = 0;
+                }
+	}
 
 	tasklet_schedule(&sdhost->card_tasklet);
 	return IRQ_HANDLED;
@@ -828,7 +856,10 @@ static int tegra_sdhci_pltfm_init(struct sdhci_host *host,
 		tegra_gpio_enable(plat->cd_gpio);
 		gpio_direction_input(plat->cd_gpio);
 
-		rc = request_irq(gpio_to_irq(plat->cd_gpio), carddetect_irq,
+		tegra_host->card_present = (gpio_get_value(plat->cd_gpio) == 0);
+
+		rc = request_threaded_irq(gpio_to_irq(plat->cd_gpio), NULL,
+				 carddetect_irq,
 				 IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
 				 mmc_hostname(host->mmc), host);
 
@@ -886,8 +917,6 @@ static int tegra_sdhci_pltfm_init(struct sdhci_host *host,
 			if (rc) {
 				dev_err(mmc_dev(host->mmc), "%s regulator_set_voltage failed: %d",
 					"vddio_sdmmc", rc);
-			} else {
-				regulator_enable(tegra_host->vdd_io_reg);
 			}
 		}
 
@@ -897,7 +926,13 @@ static int tegra_sdhci_pltfm_init(struct sdhci_host *host,
 				"vddio_sd_slot", PTR_ERR(tegra_host->vdd_slot_reg));
 			tegra_host->vdd_slot_reg = NULL;
 		} else {
-			regulator_enable(tegra_host->vdd_slot_reg);
+			if (tegra_host->card_present) {
+				if (tegra_host->vdd_slot_reg)
+					regulator_enable(tegra_host->vdd_slot_reg);
+				if (tegra_host->vdd_io_reg)
+					regulator_enable(tegra_host->vdd_io_reg);
+				tegra_host->is_rail_enabled = 1;
+			}
 		}
 	}
 
@@ -1027,10 +1062,16 @@ static int tegra_sdhci_suspend(struct sdhci_host *sdhci, pm_message_t state)
 	tegra_sdhci_set_clock(sdhci, 0);
 
 	/* Disable the power rails if any */
-	if (tegra_host->vdd_slot_reg)
-		regulator_disable(tegra_host->vdd_slot_reg);
-	if (tegra_host->vdd_io_reg)
-		regulator_disable(tegra_host->vdd_io_reg);
+	if (tegra_host->card_present) {
+		if (tegra_host->is_rail_enabled) {
+			if (tegra_host->vdd_io_reg)
+				regulator_disable(tegra_host->vdd_io_reg);
+			if (tegra_host->vdd_slot_reg)
+				regulator_disable(tegra_host->vdd_slot_reg);
+			tegra_host->is_rail_enabled = 0;
+		}
+	}
+
 	return 0;
 }
 
@@ -1040,13 +1081,17 @@ static int tegra_sdhci_resume(struct sdhci_host *sdhci)
 	struct tegra_sdhci_host *tegra_host = pltfm_host->priv;
 
 	/* Enable the power rails if any */
-	if (tegra_host->vdd_io_reg) {
-		regulator_enable(tegra_host->vdd_io_reg);
-		tegra_sdhci_signal_voltage_switch(sdhci, MMC_SIGNAL_VOLTAGE_330);
+	if (tegra_host->card_present) {
+		if (!tegra_host->is_rail_enabled) {
+			if (tegra_host->vdd_slot_reg)
+				regulator_enable(tegra_host->vdd_slot_reg);
+			if (tegra_host->vdd_io_reg) {
+                                regulator_enable(tegra_host->vdd_io_reg);
+                                tegra_sdhci_signal_voltage_switch(sdhci, MMC_SIGNAL_VOLTAGE_330);
+                        }
+			tegra_host->is_rail_enabled = 1;
+		}
 	}
-
-	if (tegra_host->vdd_slot_reg)
-		regulator_enable(tegra_host->vdd_slot_reg);
 
 	/* Setting the min identification clock of freq 400KHz */
 	tegra_sdhci_set_clock(sdhci, 400000);
