@@ -171,7 +171,7 @@ static __initdata struct tegra_clk_init_table common_clk_init_table[] = {
 	{ "hclk",	"sclk",		108000000,	true },
 	{ "pclk",	"hclk",		54000000,	true },
 #endif
-	{ "csite",	NULL,		0,		true },
+	{ "csite",	NULL,		4250000,	true },
 	{ "emc",	NULL,		0,		true },
 	{ "cpu",	NULL,		0,		true },
 	{ "kfuse",	NULL,		0,		true },
