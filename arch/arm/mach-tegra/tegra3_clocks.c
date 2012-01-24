@@ -24,6 +24,7 @@
 #include <linux/spinlock.h>
 #include <linux/delay.h>
 #include <linux/err.h>
+#include <linux/earlysuspend.h>
 #include <linux/io.h>
 #include <linux/clk.h>
 #include <linux/cpufreq.h>
@@ -331,6 +332,15 @@
 
 #define CPU_STAY_ON_BACKUP_MAX		\
 	 min(CPU_G_BACKUP_RATE, CPU_LP_BACKUP_RATE)
+
+/* Threshold to engage CPU clock skipper during CPU rate change */
+#define SKIPPER_ENGAGE_RATE		 800000000
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+#define EARLY_SUSPEND_MIN_CPU_FREQ_IDX	0
+#define ACTIVE_MIN_CPU_FREQ_IDX		1
+static struct cpufreq_frequency_table *selected_cpufreq_table;
+#endif
 
 static bool tegra3_clk_is_parent_allowed(struct clk *c, struct clk *p);
 
@@ -4368,90 +4378,94 @@ static struct cpufreq_frequency_table freq_table_300MHz[] = {
 };
 
 static struct cpufreq_frequency_table freq_table_1p0GHz[] = {
-	{ 0, 102000 },
-	{ 1, 204000 },
-	{ 2, 312000 },
-	{ 3, 456000 },
-	{ 4, 608000 },
-	{ 5, 760000 },
-	{ 6, 816000 },
-	{ 7, 912000 },
-	{ 8, 1000000 },
-	{ 9, CPUFREQ_TABLE_END },
+	{ 0, 51000 },
+	{ 1, 102000 },
+	{ 2, 204000 },
+	{ 3, 312000 },
+	{ 4, 456000 },
+	{ 5, 608000 },
+	{ 6, 760000 },
+	{ 7, 816000 },
+	{ 8, 912000 },
+	{ 9, 1000000 },
+	{10, CPUFREQ_TABLE_END },
 };
 
 static struct cpufreq_frequency_table freq_table_1p3GHz[] = {
-	{ 0,  102000 },
-	{ 1,  204000 },
-	{ 2,  340000 },
-	{ 3,  475000 },
-	{ 4,  640000 },
-	{ 5,  760000 },
-	{ 6,  860000 },
-	{ 7, 1000000 },
-	{ 8, 1100000 },
-	{ 9, 1200000 },
-	{10, 1300000 },
-	{11, CPUFREQ_TABLE_END },
+	{ 0,  51000 },
+	{ 1,  102000 },
+	{ 2,  204000 },
+	{ 3,  340000 },
+	{ 4,  475000 },
+	{ 5,  640000 },
+	{ 6,  760000 },
+	{ 7,  880000 },
+	{ 8, 1000000 },
+	{ 9, 1100000 },
+	{ 10, 1200000 },
+	{11, 1300000 },
+	{12, CPUFREQ_TABLE_END },
 };
 
 static struct cpufreq_frequency_table freq_table_1p4GHz[] = {
-	{ 0,  102000 },
-	{ 1,  204000 },
-	{ 2,  370000 },
-	{ 3,  475000 },
-	{ 4,  620000 },
-	{ 5,  760000 },
-	{ 6,  860000 },
-	{ 7, 1000000 },
-	{ 8, 1100000 },
-	{ 9, 1200000 },
-	{10, 1300000 },
-	{11, 1400000 },
+	{ 0,  51000 },
+	{ 1,  102000 },
+	{ 2,  204000 },
+	{ 3,  370000 },
+	{ 4,  475000 },
+	{ 5,  620000 },
+	{ 6,  760000 },
+	{ 7,  880000 },
+	{ 8, 1000000 },
+	{ 9, 1100000 },
+	{10, 1200000 },
+	{11, 1300000 },
 	{12, CPUFREQ_TABLE_END },
 };
 
 static struct cpufreq_frequency_table freq_table_1p5GHz[] = {
-	{ 0,  102000 },
-	{ 1,  204000 },
-	{ 2,  340000 },
-	{ 3,  475000 },
-	{ 4,  640000 },
-	{ 5,  760000 },
-	{ 6,  860000 },
-	{ 7, 1000000 },
-	{ 8, 1100000 },
-	{ 9, 1200000 },
-	{10, 1300000 },
-	{11, 1400000 },
-	{12, 1500000 },
-	{13, CPUFREQ_TABLE_END },
+	{ 0,  51000 },
+	{ 1,  102000 },
+	{ 2,  204000 },
+	{ 3,  340000 },
+	{ 4,  475000 },
+	{ 5,  640000 },
+	{ 6,  760000 },
+	{ 7,  880000 },
+	{ 8, 1000000 },
+	{ 9, 1100000 },
+	{10, 1200000 },
+	{11, 1300000 },
+	{12, 1400000 },
+	{13, 1500000 },
+	{14, CPUFREQ_TABLE_END },
 };
 
 static struct cpufreq_frequency_table freq_table_1p7GHz[] = {
-	{ 0,  102000 },
-	{ 1,  204000 },
-	{ 2,  370000 },
-	{ 3,  475000 },
-	{ 4,  620000 },
-	{ 5,  760000 },
-	{ 6,  910000 },
-	{ 7, 1150000 },
-	{ 8, 1300000 },
-	{ 9, 1400000 },
-	{10, 1500000 },
-	{11, 1600000 },
-	{12, 1700000 },
-	{13, CPUFREQ_TABLE_END },
+	{ 0,  51000 },
+	{ 1,  102000 },
+	{ 2,  204000 },
+	{ 3,  370000 },
+	{ 4,  475000 },
+	{ 5,  620000 },
+	{ 6,  800000 },
+	{ 7, 1000000 },
+	{ 8, 1150000 },
+	{ 9, 1300000 },
+	{10, 1400000 },
+	{11, 1500000 },
+	{12, 1600000 },
+	{13, 1700000 },
+	{14, CPUFREQ_TABLE_END },
 };
 
 static struct tegra_cpufreq_table_data cpufreq_tables[] = {
 	{ freq_table_300MHz, 0, 1 },
-	{ freq_table_1p0GHz, 1, 7, 2},
-	{ freq_table_1p3GHz, 1, 9, 2},
-	{ freq_table_1p4GHz, 1, 10, 2},
-	{ freq_table_1p5GHz, 1, 11, 2},
-	{ freq_table_1p7GHz, 1, 11, 2},
+	{ freq_table_1p0GHz, 1, 8, 3},
+	{ freq_table_1p3GHz, 1, 10, 3},
+	{ freq_table_1p4GHz, 1, 11, 3},
+	{ freq_table_1p5GHz, 1, 12, 3},
+	{ freq_table_1p7GHz, 1, 12, 3},
 };
 
 static int clip_cpu_rate_limits(
@@ -4487,6 +4501,8 @@ static int clip_cpu_rate_limits(
 		return ret;
 	}
 	cpu_clk_lp->max_rate = freq_table[idx].frequency * 1000;
+	cpu_clk_lp->min_rate =
+		freq_table[ACTIVE_MIN_CPU_FREQ_IDX].frequency * 1000;
 	cpu_clk_g->min_rate = freq_table[idx-1].frequency * 1000;
 	return 0;
 }
@@ -4517,8 +4533,11 @@ struct tegra_cpufreq_table_data *tegra_cpufreq_table_get(void)
 				ret = clip_cpu_rate_limits(
 					cpufreq_tables[i].freq_table,
 					&policy, cpu_clk_g, cpu_clk_lp);
-				if (!ret)
+				if (!ret) {
+					selected_cpufreq_table =
+						cpufreq_tables[i].freq_table;
 					return &cpufreq_tables[i];
+				}
 			}
 		}
 	}
@@ -4756,6 +4775,27 @@ static void tegra_clk_resume(void)
 #define tegra_clk_resume NULL
 #endif
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+
+static struct early_suspend tegra3_clk_early_suspender;
+
+static void tegra3_clk_early_suspend(struct early_suspend *h)
+{
+	struct clk *cpu_clk_lp = &tegra_clk_virtual_cpu_lp;
+	cpu_clk_lp->min_rate =
+		selected_cpufreq_table[EARLY_SUSPEND_MIN_CPU_FREQ_IDX]
+		.frequency * 1000;
+}
+
+static void tegra3_clk_late_resume(struct early_suspend *h)
+{
+	struct clk *cpu_clk_lp = &tegra_clk_virtual_cpu_lp;
+	cpu_clk_lp->min_rate =
+		selected_cpufreq_table[ACTIVE_MIN_CPU_FREQ_IDX]
+		.frequency * 1000;
+}
+#endif
+
 static struct syscore_ops tegra_clk_syscore_ops = {
 	.suspend = tegra_clk_suspend,
 	.resume = tegra_clk_resume,
@@ -4801,4 +4841,9 @@ void __init tegra_soc_init_clocks(void)
 	tegra_init_cpu_edp_limits(0);
 
 	register_syscore_ops(&tegra_clk_syscore_ops);
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	tegra3_clk_early_suspender.suspend = tegra3_clk_early_suspend;
+	tegra3_clk_early_suspender.resume = tegra3_clk_late_resume;
+	register_early_suspend(&tegra3_clk_early_suspender);
+#endif
 }
