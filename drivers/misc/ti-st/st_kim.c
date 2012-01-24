@@ -516,8 +516,6 @@ long st_kim_stop(void *kim_data)
 {
 	long err = 0;
 	struct kim_data_s	*kim_gdata = (struct kim_data_s *)kim_data;
-	struct ti_st_plat_data	*pdata =
-		kim_gdata->kim_pdev->dev.platform_data;
 
 	INIT_COMPLETION(kim_gdata->ldisc_installed);
 
@@ -545,9 +543,6 @@ long st_kim_stop(void *kim_data)
 	mdelay(1);
 	gpio_set_value(kim_gdata->nshutdown, GPIO_LOW);
 
-	/* platform specific disable */
-	/*if (pdata->chip_disable)
-		pdata->chip_disable();*/
 	return err;
 }
 
@@ -716,8 +711,6 @@ static int kim_probe(struct platform_device *pdev)
 		pr_err(" gpio %ld request failed ", kim_gdata->nshutdown);
 		return status;
 	}
-
-	tegra_gpio_enable(kim_gdata->nshutdown);
 
 	/* Configure nShutdown GPIO as output=0 */
 	status = gpio_direction_output(kim_gdata->nshutdown, 0);
