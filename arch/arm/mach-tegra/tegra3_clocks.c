@@ -3271,7 +3271,7 @@ static struct clk tegra_pll_c = {
 static struct clk tegra_pll_c_out1 = {
 	.name      = "pll_c_out1",
 	.ops       = &tegra_pll_div_ops,
-	.flags     = DIV_U71,
+	.flags     = DIV_U71 | PERIPH_ON_CBUS,
 	.parent    = &tegra_pll_c,
 	.reg       = 0x84,
 	.reg_shift = 0,
@@ -4493,6 +4493,9 @@ bool tegra_clk_is_parent_allowed(struct clk *c, struct clk *p)
 {
 	if (c->flags & PERIPH_ON_CBUS)
 		return p != &tegra_pll_m;
+	else
+		return p != &tegra_pll_c;
+
 	return true;
 }
 
