@@ -34,6 +34,7 @@
 
 #include "devices.h"
 #include "gpio-names.h"
+#include "board.h"
 
 #define trimslice_lvds_shutdown	TEGRA_GPIO_PP5
 #define trimslice_hdmi_hpd	TEGRA_GPIO_PN7
@@ -180,18 +181,10 @@ static struct nvhost_device trimslice_disp2_device = {
 };
 
 static struct nvmap_platform_carveout trimslice_carveouts[] = {
-	[0] = {
-		.name		= "iram",
-		.usage_mask	= NVMAP_HEAP_CARVEOUT_IRAM,
-		.base		= TEGRA_IRAM_BASE,
-		.size		= TEGRA_IRAM_SIZE,
-		.buddy_size	= 0, /* no buddy allocation for IRAM */
-	},
+	[0] = NVMAP_HEAP_CARVEOUT_IRAM_INIT,
 	[1] = {
 		.name		= "generic-0",
 		.usage_mask	= NVMAP_HEAP_CARVEOUT_GENERIC,
-		.base		= 0x18C00000,
-		.size		= SZ_128M - 0xC00000,
 		.buddy_size	= SZ_32K,
 	},
 };
@@ -248,7 +241,7 @@ __setup("hdmi=", tegra_default_hdmi_mode_setup);
 
 int __init trimslice_panel_init(void)
 {
-	int err;
+	int err = 0;
 
 	/* Configure HDMI hotplug  as input */
 	gpio_request(trimslice_hdmi_hpd, "hdmi_hpd");
@@ -260,6 +253,9 @@ int __init trimslice_panel_init(void)
 	gpio_direction_output(trimslice_lvds_shutdown, 0);
 	tegra_gpio_enable(trimslice_lvds_shutdown);
 
+	trimslice_carveouts[1].base = tegra_carveout_start;
+	trimslice_carveouts[1].size = tegra_carveout_size;
+
 	err = platform_add_devices(trimslice_gfx_devices,
 				   ARRAY_SIZE(trimslice_gfx_devices));
 
@@ -269,8 +265,8 @@ int __init trimslice_panel_init(void)
 	 */
 	trimslice_disp1_device.dev_neighbour =
 		(struct device *) &trimslice_disp2_device;
-	trimslice_disp2_device.dev_neighbour
-		= (struct device *) &trimslice_disp1_device;
+	trimslice_disp2_device.dev_neighbour =
+		(struct device *) &trimslice_disp1_device;
 
 	((struct tegra_dc_platform_data*)
 		(trimslice_disp1_device.dev.platform_data))->default_mode =

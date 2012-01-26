@@ -20,6 +20,8 @@
 
 #include <linux/kernel.h>
 #include <linux/init.h>
+#include <linux/slab.h>
+#include <linux/ctype.h>
 #include <linux/platform_device.h>
 #include <linux/serial_8250.h>
 #include <linux/io.h>
@@ -29,6 +31,7 @@
 #include <linux/gpio_keys.h>
 #include <linux/gpio.h>
 #include <linux/input.h>
+#include <linux/memblock.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -151,7 +154,7 @@ static struct platform_device *trimslice_devices[] __initdata = {
 	&debug_uart,
 	&tegra_sdhci_device1,
 	&tegra_sdhci_device4,
-	// &tegra_pmu_device,
+	&tegra_pmu_device,
 
 	/* &tegra_rtc_device, */
 	&tegra_gart_device,
@@ -357,7 +360,7 @@ static struct tegra_pci_platform_data trimslice_pci_platform_data = {
 	.port_status[0]		= 1,
 	.port_status[1]		= 0,
 	.use_dock_detect	= 0,
-	.gpio				= 0,
+	.gpio			= 0,
 };
 
 static int __init tegra_trimslice_pci_init(void)
@@ -431,15 +434,34 @@ static void __init tegra_trimslice_init(void)
 	platform_add_devices(trimslice_devices, ARRAY_SIZE(trimslice_devices));
 
 	trimslice_usb_init();
-	//trimslice_i2c_init();
-	//trimslice_panel_init();
+	trimslice_i2c_init();
+	trimslice_panel_init();
 	//trimslice_keys_init();
+}
+
+int __init tegra_trimslice_protected_aperture_init(void)
+{
+	if (!machine_is_trimslice())
+		return 0;
+
+	tegra_protected_aperture_init(tegra_grhost_aperture);
+	return 0;
+}
+late_initcall(tegra_trimslice_protected_aperture_init);
+
+void __init tegra_trimslice_reserve(void)
+{
+	if (memblock_reserve(0x0, 4096) < 0)
+		pr_warn("Cannot reserve first 4K of memory for safety\n");
+
+	tegra_reserve(SZ_256M, SZ_8M, SZ_16M);
 }
 
 MACHINE_START(TRIMSLICE, "trimslice")
 	.boot_params	= 0x00000100,
-	.fixup		= tegra_trimslice_fixup,
+/*	.fixup		= tegra_trimslice_fixup, */
 	.map_io         = tegra_map_common_io,
+	.reserve        = tegra_trimslice_reserve,
 	.init_early	= tegra_init_early,
 	.init_irq       = tegra_init_irq,
 	.timer          = &tegra_timer,
