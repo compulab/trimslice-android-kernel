@@ -1,6 +1,8 @@
 /*
  * Copyright (C) 2010 Google, Inc.
  *
+ * Copyright (c) 2012, NVIDIA CORPORATION.  All rights reserved.
+ *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
  * may be copied, distributed, and modified under those terms.
@@ -40,7 +42,9 @@
 #define SDHCI_VENDOR_CLOCK_CNTRL_SDR50_TUNING		0x20
 
 #define SDHCI_VENDOR_MISC_CNTRL		0x120
-#define SDHCI_VENDOR_MISC_CNTRL_SDMMC_SPARE0_ENABLE_SD_3_0	0x20
+#define SDHCI_VENDOR_MISC_CNTRL_ENABLE_SDR104_SUPPORT	0x8
+#define SDHCI_VENDOR_MISC_CNTRL_ENABLE_SDR50_SUPPORT	0x10
+#define SDHCI_VENDOR_MISC_CNTRL_ENABLE_SD_3_0	0x20
 
 #define SDMMC_SDMEMCOMPPADCTRL	0x1E0
 #define SDMMC_SDMEMCOMPPADCTRL_VREF_SEL_MASK	0xF
@@ -196,7 +200,9 @@ static void tegra3_sdhci_post_reset_init(struct sdhci_host *sdhci)
 
 	/* Enable SDHOST v3.0 support */
 	misc_ctrl = sdhci_readw(sdhci, SDHCI_VENDOR_MISC_CNTRL);
-	misc_ctrl |= SDHCI_VENDOR_MISC_CNTRL_SDMMC_SPARE0_ENABLE_SD_3_0;
+	misc_ctrl |= SDHCI_VENDOR_MISC_CNTRL_ENABLE_SD_3_0 |
+		SDHCI_VENDOR_MISC_CNTRL_ENABLE_SDR104_SUPPORT |
+		SDHCI_VENDOR_MISC_CNTRL_ENABLE_SDR50_SUPPORT;
 	sdhci_writew(sdhci, misc_ctrl, SDHCI_VENDOR_MISC_CNTRL);
 }
 
