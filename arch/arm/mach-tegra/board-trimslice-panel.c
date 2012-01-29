@@ -76,8 +76,6 @@ static struct resource trimslice_disp1_resources[] = {
 	},
 	{
 		.name	= "fbmem",
-		.start	= 0x18012000,
-		.end	= 0x18414000 - 1, /* enough for 1080P 16bpp */
 		.flags	= IORESOURCE_MEM,
 	},
 };
@@ -98,8 +96,6 @@ static struct resource trimslice_disp2_resources[] = {
 	{
 		.name	= "fbmem",
 		.flags	= IORESOURCE_MEM,
-		.start	= 0x18414000,
-		.end	= 0x18BFD000 - 1,
 	},
 	{
 		.name	= "hdmi_regs",
@@ -112,16 +108,17 @@ static struct resource trimslice_disp2_resources[] = {
 
 static struct tegra_fb_data trimslice_fb_data = {
 	.win		= 0,
-	.xres		= 1280,
-	.yres		= 720,
-	.bits_per_pixel	= 16,
+	.xres		= 1366,
+	.yres		= 768,
+	.bits_per_pixel	= 32,
+	.flags		= TEGRA_FB_FLIP_ON_PROBE,
 };
 
 static struct tegra_fb_data trimslice_hdmi_fb_data = {
-	.win		= 0,
-	.xres		= 1280,
-	.yres		= 720,
-	.bits_per_pixel	= 16,
+	.xres		= 1366,
+	.yres		= 768,
+	.bits_per_pixel	= 32,
+	.flags		= TEGRA_FB_FLIP_ON_PROBE,
 };
 
 static struct tegra_dc_out trimslice_disp1_out = {
@@ -204,8 +201,11 @@ static struct platform_device trimslice_nvmap_device = {
 
 static struct platform_device *trimslice_gfx_devices[] __initdata = {
 	&trimslice_nvmap_device,
+#ifdef CONFIG_TEGRA_GRHOST
 	&tegra_grhost_device,
-	&tegra_pwfm2_device,
+#endif
+
+	// &tegra_pwfm2_device, 
 };
 
 static int  tegra_default_dvi_mode = 0;
@@ -242,6 +242,7 @@ __setup("hdmi=", tegra_default_hdmi_mode_setup);
 int __init trimslice_panel_init(void)
 {
 	int err = 0;
+	struct resource __maybe_unused *res;
 
 	/* Configure HDMI hotplug  as input */
 	gpio_request(trimslice_hdmi_hpd, "hdmi_hpd");
@@ -259,7 +260,18 @@ int __init trimslice_panel_init(void)
 	err = platform_add_devices(trimslice_gfx_devices,
 				   ARRAY_SIZE(trimslice_gfx_devices));
 
-	/* Make nvhost devices aware of each other.
+#if defined(CONFIG_TEGRA_GRHOST) && defined(CONFIG_TEGRA_DC)
+	res = nvhost_get_resource_byname(&trimslice_disp1_device,
+		IORESOURCE_MEM, "fbmem");
+	res->start = tegra_fb_start;
+	res->end = tegra_fb_start + tegra_fb_size - 1;
+
+	res = nvhost_get_resource_byname(&trimslice_disp2_device,
+		IORESOURCE_MEM, "fbmem");
+	res->start = tegra_fb2_start;
+	res->end = tegra_fb2_start + tegra_fb2_size - 1;
+	 
+	/* Make nvhost devices aware one of the another.
 	   This is required as the devices use mutual resource (PLL_D)
 	   and should be aware of the neighbour requirement.
 	 */
@@ -279,7 +291,7 @@ int __init trimslice_panel_init(void)
 		err = nvhost_device_register(&trimslice_disp1_device);
 	if (!err)
 		err = nvhost_device_register(&trimslice_disp2_device);
-
+#endif
 	return err;
 }
 
