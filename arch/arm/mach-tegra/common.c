@@ -175,7 +175,7 @@ static __initdata struct tegra_clk_init_table common_clk_init_table[] = {
 	{ "vi_sensor",	"pll_c",	0,		false },
 	{ "vi",		"pll_c",	0,		false },
 	{ "2d",		"pll_c",	0,		false },
-        { "3d",		"pll_c",	0,		false },
+	{ "3d",		"pll_c",	0,		false },
 #endif
 #else
 	{ "pll_p",	NULL,		0,		true },
@@ -381,8 +381,15 @@ static void __init tegra_init_power(void)
         tegra_powergate_partition_with_clk_off(TEGRA_POWERGATE_SATA);
 #endif
 #ifdef CONFIG_ARCH_TEGRA_HAS_PCIE
-	tegra_powergate_partition_with_clk_off(TEGRA_POWERGATE_PCIE);
+	/*
+	 *	tegra_powergate_partition_with_clk_off(TEGRA_POWERGATE_PCIE);
+	 */
+		
 #endif
+	/*
+	 *	tegra_unpowergate_partition(TEGRA_POWERGATE_MPE);
+         *	tegra_unpowergate_partition(TEGRA_POWERGATE_3D);
+	 */
 }
 
 static inline unsigned long gizmo_readl(unsigned long offset)
@@ -514,6 +521,8 @@ static int __init tegra_vpr_arg(char *options)
 		tegra_vpr_start = memparse(p+1, &p);
 	pr_info("Found vpr, start=0x%lx size=%lx",
 		tegra_vpr_start, tegra_vpr_size);
+
+	return 0;
 }
 early_param("vpr", tegra_vpr_arg);
 
@@ -545,9 +554,8 @@ static int __init tegra_board_power_supply_type(char *options)
 		pow_supply_type = POWER_SUPPLY_TYPE_MAINS;
 	else if (!strcmp(options, "Battery"))
 		pow_supply_type = POWER_SUPPLY_TYPE_BATTERY;
-	else
-		return 0;
-	return 1;
+
+	return 0;
 }
 __setup("power_supply=", tegra_board_power_supply_type);
 

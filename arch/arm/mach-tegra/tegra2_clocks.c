@@ -1550,7 +1550,7 @@ static int tegra2_clk_shared_bus_update(struct clk *bus)
 	}
 
 	old_rate = clk_get_rate_locked(bus);
-	pr_info("[%s:%d] bus  %s  rate %lu -> %lu \n", __FUNCTION__, __LINE__, bus->name, old_rate, rate);
+	/*pr_info("[%s:%d] bus  %s  rate %lu -> %lu \n", __FUNCTION__, __LINE__, bus->name, old_rate, rate);*/
 	if (rate == old_rate)
 		return 0;
 
@@ -1850,6 +1850,8 @@ static struct clk tegra_pll_p_out4 = {
 static struct clk_pll_freq_table tegra_pll_a_freq_table[] = {
 	{ 28800000, 56448000, 49, 25, 1, 1},
 	{ 28800000, 73728000, 64, 25, 1, 1},
+	{ 28800000, 11289600, 49, 25, 1, 1},
+	{ 28800000, 12288000, 64, 25, 1, 1},
 	{ 28800000, 24000000,  5,  6, 1, 1},
 	{ 0, 0, 0, 0, 0, 0 },
 };
@@ -1889,10 +1891,10 @@ static struct clk_pll_freq_table tegra_pll_d_freq_table[] = {
 	{ 19200000, 216000000, 135, 12, 1, 3},
 	{ 26000000, 216000000, 216, 26, 1, 4},
 
-	{ 12000000,   5000000, 10, 24, 1, 4},
-	{ 12000000,  10000000, 10, 12, 1, 4},
-	{ 12000000, 161500000, 323, 24, 1, 4},
-	{ 12000000, 162000000, 162, 12, 1, 4},
+	{ 12000000, 252000000, 252, 12, 1, 4},
+	{ 13000000, 252000000, 252, 13, 1, 4},
+	{ 19200000, 252000000, 210, 16, 1, 3},
+	{ 26000000, 252000000, 252, 26, 1, 4},
 
 	{ 12000000, 318000000, 53,  2,  1, 2},
 	{ 13000000, 318000000, 318, 13, 1, 8},
@@ -2508,8 +2510,8 @@ struct clk tegra_list_shared_clks[] = {
 	SHARED_CLK("disp1.emc",	"tegradc.0",		"emc",	&tegra_clk_emc),
 	SHARED_CLK("disp2.emc",	"tegradc.1",		"emc",	&tegra_clk_emc),
 	SHARED_CLK("hdmi.emc",	"hdmi",			"emc",	&tegra_clk_emc),
-	// SHARED_CLK("3d.emc",	"tegra_gr3d",		"emc",	&tegra_clk_emc),
-	// SHARED_CLK("2d.emc",	"tegra_gr2d",		"emc",	&tegra_clk_emc),
+	SHARED_CLK("3d.emc",	"tegra_gr3d",		"emc",	&tegra_clk_emc),
+	SHARED_CLK("2d.emc",	"tegra_gr2d",		"emc",	&tegra_clk_emc),
 	SHARED_CLK("mpe.emc",	"tegra_mpe",		"emc",	&tegra_clk_emc),
 	SHARED_CLK("usbd.emc",	"fsl-tegra-udc",	"emc",	&tegra_clk_emc),
 	SHARED_CLK("usb1.emc",	"tegra-ehci.0",		"emc",	&tegra_clk_emc),
