@@ -258,9 +258,10 @@ static int clk_enable_locked(struct clk *c)
 			if (ret)
 				return ret;
 		}
-
-		if (set_rate)
-			clk_set_rate_locked(c, rate);
+		
+		if (set_rate && !((c->refcnt == 0) && (c->flags & (DIV_U71 | DIV_U16)) &&
+		    clk_is_auto_dvfs(c)))
+		        clk_set_rate_locked(c, rate);
 
 		if (c->ops && c->ops->enable) {
 			ret = c->ops->enable(c);
