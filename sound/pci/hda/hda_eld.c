@@ -365,6 +365,11 @@ int snd_hdmi_get_eld(struct hdmi_eld *eld,
 		buf[i] = hdmi_get_eld_byte(codec, nid, i);
 
 	ret = hdmi_update_eld(eld, buf, size);
+	codec->ac3dec_capable = false;
+	for (i = 0; i < eld->sad_count; i++) {
+		if (eld->sad[i].format == AUDIO_CODING_TYPE_AC3)
+			codec->ac3dec_capable = true;
+	}
 
 	kfree(buf);
 	return ret;
