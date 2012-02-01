@@ -27,7 +27,7 @@
 #include <linux/device.h>
 #include <linux/miscdevice.h>
 
-#define ADB_BULK_BUFFER_SIZE           16384
+#define ADB_BULK_BUFFER_SIZE           4096
 
 /* number of tx requests to allocate */
 #define TX_REQ_MAX 4
