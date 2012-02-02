@@ -61,7 +61,7 @@ static struct dvfs_rail tegra3_dvfs_rail_vdd_cpu = {
 
 static struct dvfs_rail tegra3_dvfs_rail_vdd_core = {
 	.reg_id = "vdd_core",
-	.max_millivolts = 1350,
+	.max_millivolts = 1300,
 	.min_millivolts = 950,
 	.step = VDD_SAFE_STEP,
 };
