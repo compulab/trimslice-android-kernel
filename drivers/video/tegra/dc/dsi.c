@@ -1262,6 +1262,21 @@ fail:
 	return err;
 }
 
+static void tegra_dsi_soft_reset(struct tegra_dc_dsi_data *dsi)
+{
+	tegra_dsi_writel(dsi,
+		DSI_POWER_CONTROL_LEG_DSI_ENABLE(TEGRA_DSI_DISABLE),
+		DSI_POWER_CONTROL);
+	/* stabilization delay */
+	udelay(300);
+
+	tegra_dsi_writel(dsi,
+		DSI_POWER_CONTROL_LEG_DSI_ENABLE(TEGRA_DSI_ENABLE),
+		DSI_POWER_CONTROL);
+	/* stabilization delay */
+	udelay(300);
+}
+
 static bool tegra_dsi_write_busy(struct tegra_dc_dsi_data *dsi)
 {
 	u32 timeout = 0;
@@ -1300,23 +1315,22 @@ static bool tegra_dsi_read_busy(struct tegra_dc_dsi_data *dsi)
 
 static bool tegra_dsi_host_busy(struct tegra_dc_dsi_data *dsi)
 {
-	int err = 0;
-
 	if (tegra_dsi_write_busy(dsi)) {
-		err = -EBUSY;
 		dev_err(&dsi->dc->ndev->dev,
 			"DSI trigger bit already set\n");
 		goto fail;
 	}
 
 	if (tegra_dsi_read_busy(dsi)) {
-		err = -EBUSY;
 		dev_err(&dsi->dc->ndev->dev,
 			"DSI immediate bta bit already set\n");
 		goto fail;
 	}
+
+	return false;
 fail:
-	return err;
+	tegra_dsi_soft_reset(dsi);
+	return false;
 }
 
 static void tegra_dsi_reset_underflow_overflow
@@ -1333,21 +1347,6 @@ static void tegra_dsi_reset_underflow_overflow
 		tegra_dsi_writel(dsi, val, DSI_HOST_DSI_CONTROL);
 		ndelay(200);
 	}
-}
-
-static void tegra_dsi_soft_reset(struct tegra_dc_dsi_data *dsi)
-{
-	tegra_dsi_writel(dsi,
-		DSI_POWER_CONTROL_LEG_DSI_ENABLE(TEGRA_DSI_DISABLE),
-		DSI_POWER_CONTROL);
-	/* stabilization delay */
-	udelay(300);
-
-	tegra_dsi_writel(dsi,
-		DSI_POWER_CONTROL_LEG_DSI_ENABLE(TEGRA_DSI_ENABLE),
-		DSI_POWER_CONTROL);
-	/* stabilization delay */
-	udelay(300);
 }
 
 static void tegra_dsi_reset_read_count(struct tegra_dc_dsi_data *dsi)
