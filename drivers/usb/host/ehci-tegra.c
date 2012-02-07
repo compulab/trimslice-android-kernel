@@ -52,6 +52,10 @@
 #define HOSTPC1_DEVLC_STS 		(1 << 28)
 #define HOSTPC1_DEVLC_PTS(x)		(((x) & 0x7) << 29)
 
+#define USB1_PREFETCH_ID               6
+#define USB2_PREFETCH_ID               17
+#define USB3_PREFETCH_ID               18
+
 struct tegra_ehci_hcd {
 	struct ehci_hcd *ehci;
 	struct tegra_usb_phy *phy;
@@ -101,6 +105,16 @@ static irqreturn_t tegra_ehci_irq (struct usb_hcd *hcd)
 	u32 val;
 	irqreturn_t irq_status;
 	bool pmc_remote_wakeup = false;
+
+#ifndef CONFIG_ARCH_TEGRA_2x_SOC
+	/* Fence read for coherency of AHB master intiated writes */
+	if (tegra->phy->instance == 0)
+		readl(IO_ADDRESS(IO_PPCS_PHYS + USB1_PREFETCH_ID));
+	else if (tegra->phy->instance == 1)
+		readl(IO_ADDRESS(IO_PPCS_PHYS + USB2_PREFETCH_ID));
+	else if (tegra->phy->instance == 2)
+		readl(IO_ADDRESS(IO_PPCS_PHYS + USB3_PREFETCH_ID));
+#endif
 
 	if ((tegra->phy->usb_phy_type == TEGRA_USB_PHY_TYPE_UTMIP) &&
 		(tegra->ehci->has_hostpc)) {
