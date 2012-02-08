@@ -43,6 +43,7 @@
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
 #include <linux/workqueue.h>
+#include <linux/pm_qos_params.h>
 
 #include <asm/byteorder.h>
 #include <asm/io.h>
@@ -82,6 +83,7 @@ static struct usb_sys_interface *usb_sys_regs;
 
 /* it is initialized in probe()  */
 static struct fsl_udc *udc_controller = NULL;
+static struct pm_qos_request_list boost_cpu_freq_req;
 
 static const struct usb_endpoint_descriptor
 fsl_ep0_desc = {
@@ -1247,6 +1249,10 @@ static int fsl_vbus_session(struct usb_gadget *gadget, int is_active)
 		if (udc->vbus_active && !is_active) {
 			/* If cable disconnected, cancel any delayed work */
 			cancel_delayed_work(&udc->work);
+#ifdef CONFIG_TEGRA_GADGET_BOOST_CPU_FREQ
+			pm_qos_update_request(&boost_cpu_freq_req,
+							PM_QOS_DEFAULT_VALUE);
+#endif
 			spin_lock_irqsave(&udc->lock, flags);
 			/* reset all internal Queues and inform client driver */
 			reset_queues(udc);
@@ -1284,6 +1290,10 @@ static int fsl_vbus_session(struct usb_gadget *gadget, int is_active)
 			 * charger if setup packet is not received */
 			schedule_delayed_work(&udc->work,
 				USB_CHARGER_DETECTION_WAIT_TIME_MS);
+#ifdef CONFIG_TEGRA_GADGET_BOOST_CPU_FREQ
+			pm_qos_update_request(&boost_cpu_freq_req,
+				(s32)CONFIG_TEGRA_GADGET_BOOST_CPU_FREQ * 1000);
+#endif
 		}
 	}
 
@@ -2092,6 +2102,9 @@ static void fsl_udc_charger_detect_work(struct work_struct* work)
 				udc->vbus_regulator, 0,
 				USB_CHARGING_CURRENT_LIMIT_MA*1000);
 		}
+#ifdef CONFIG_TEGRA_GADGET_BOOST_CPU_FREQ
+		pm_qos_update_request(&boost_cpu_freq_req, PM_QOS_DEFAULT_VALUE);
+#endif
 	}
 }
 
@@ -2873,6 +2886,10 @@ static int __init fsl_udc_probe(struct platform_device *pdev)
 	/* create a delayed work for detecting the USB charger */
 	INIT_DELAYED_WORK(&udc_controller->work, fsl_udc_charger_detect_work);
 	INIT_WORK(&udc_controller->charger_work, fsl_udc_set_current_limit_work);
+#ifdef CONFIG_TEGRA_GADGET_BOOST_CPU_FREQ
+	pm_qos_add_request(&boost_cpu_freq_req, PM_QOS_CPU_FREQ_MIN,
+							PM_QOS_DEFAULT_VALUE);
+#endif
 
 	/* Get the regulator for drawing the vbus current in udc driver */
 	udc_controller->vbus_regulator = regulator_get(NULL, "usb_bat_chg");
