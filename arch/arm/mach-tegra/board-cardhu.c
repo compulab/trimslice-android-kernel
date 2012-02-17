@@ -184,6 +184,7 @@ static __initdata struct tegra_clk_init_table cardhu_clk_init_table[] = {
 	{ "hda2codec_2x","pll_p",	48000000,	false},
 	{ "pwm",	"pll_p",	3187500,	false},
 	{ "blink",	"clk_32k",	32768,		true},
+	{ "i2s0",	"pll_a_out0",	0,		false},
 	{ "i2s1",	"pll_a_out0",	0,		false},
 	{ "i2s3",	"pll_a_out0",	0,		false},
 	{ "spdif_out",	"pll_a_out0",	0,		false},
@@ -399,6 +400,21 @@ static struct i2c_board_info __initdata cardhu_codec_max98095_info[] = {
 	},
 };
 
+static struct wm8903_platform_data cardhu_aic3262_pdata = {
+        .irq_active_low = 0,
+        .micdet_cfg = 0,
+        .micdet_delay = 100,
+};
+
+static struct i2c_board_info __initdata cardhu_codec_aic326x_info[] = {
+	{
+		I2C_BOARD_INFO("aic3262-codec", 0x18),
+		.platform_data=&cardhu_aic3262_pdata,
+		.irq = TEGRA_GPIO_TO_IRQ(TEGRA_GPIO_CDC_IRQ),
+	},
+};
+
+
 static void cardhu_i2c_init(void)
 {
 	struct board_info pmu_board_info;
@@ -426,6 +442,7 @@ static void cardhu_i2c_init(void)
 	if (pmu_board_info.board_id != BOARD_PMU_PM298)
 		i2c_register_board_info(4, cardhu_codec_rt5640_info, 1);
 
+	i2c_register_board_info(4, cardhu_codec_aic326x_info, 1);
 	i2c_register_board_info(2, cardhu_i2c_bus3_board_info, 1);
 }
 
@@ -717,6 +734,22 @@ static struct platform_device cardhu_audio_max98095_device = {
 	},
 };
 
+static struct tegra_asoc_platform_data cardhu_aic326x_audio_pdata = {
+        .gpio_spkr_en           = -1,
+        .gpio_hp_det            = TEGRA_GPIO_HP_DET,
+        .gpio_hp_mute           = -1,
+        .gpio_int_mic_en        = -1,
+        .gpio_ext_mic_en        = -1,
+};
+
+static struct platform_device cardhu_aic326x_audio_device = {
+	.name	= "tegra-snd-aic326x",
+	.id	= 0,
+	.dev	= {
+		.platform_data  = &cardhu_aic326x_audio_pdata,
+	},
+};
+
 static struct platform_device *cardhu_devices[] __initdata = {
 	&tegra_pmu_device,
 	&tegra_rtc_device,
@@ -736,15 +769,18 @@ static struct platform_device *cardhu_devices[] __initdata = {
 	&tegra_dam_device0,
 	&tegra_dam_device1,
 	&tegra_dam_device2,
+	&tegra_i2s_device0,
 	&tegra_i2s_device1,
 	&tegra_i2s_device3,
 	&tegra_spdif_device,
 	&spdif_dit_device,
 	&bluetooth_dit_device,
+	&baseband_dit_device,
 	&cardhu_bcm4329_rfkill_device,
 	&tegra_pcm_device,
 	&cardhu_audio_wm8903_device,
 	&cardhu_audio_max98095_device,
+	&cardhu_aic326x_audio_device,
 	&tegra_hda_device,
 #if defined(CONFIG_CRYPTO_DEV_TEGRA_AES)
 	&tegra_aes_device,
