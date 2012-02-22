@@ -2,6 +2,7 @@
  * drivers/cpufreq/cpufreq_interactive.c
  *
  * Copyright (C) 2010 Google, Inc.
+ * Copyright (C) 2012 NVIDIA Corporation.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -21,6 +22,9 @@
 #include <linux/cpufreq.h>
 #include <linux/mutex.h>
 #include <linux/sched.h>
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+#include <linux/slab.h>
+#endif
 #include <linux/tick.h>
 #include <linux/timer.h>
 #include <linux/workqueue.h>
@@ -46,6 +50,9 @@ struct cpufreq_interactive_cpuinfo {
 	struct cpufreq_frequency_table *freq_table;
 	unsigned int target_freq;
 	int governor_enabled;
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+	unsigned long boosted;
+#endif
 };
 
 static DEFINE_PER_CPU(struct cpufreq_interactive_cpuinfo, cpuinfo);
@@ -83,6 +90,53 @@ static unsigned long sustain_load;
  */
 #define DEFAULT_MIN_SAMPLE_TIME 30000;
 static unsigned long min_sample_time;
+
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+/*
+ * Parameters for dynamic frequency mode
+ */
+struct dynamic_freq_param {
+	unsigned long downsustain_load;
+};
+
+struct cpufreq_interactive_dynamic_freq {
+	unsigned long go_maxspeed_load;
+	unsigned long go_upspeed_load;
+	unsigned long sustain_load;
+	unsigned long go_downspeed_load;
+	unsigned long boost_high_boundary;
+	unsigned long boost_low_boundary;
+	unsigned long boost_step;
+	unsigned long buck_step;
+
+	struct dynamic_freq_param *params;
+	struct cpufreq_frequency_table *freq_table;
+	unsigned int freq_num;
+
+	unsigned long enabled;
+};
+
+#define DYNAMIC_FREQ_GO_MAXSPEED_LOAD		95
+#define DYNAMIC_FREQ_GO_UPSPEED_LOAD		85
+#define DYNAMIC_FREQ_SUSTAIN_LOAD		80
+#define DYNAMIC_FREQ_GO_DOWNSPEED_LOAD		70
+#define DYNAMIC_FREQ_BOOST_HIGH_BOUNDARY	700000
+#define DYNAMIC_FREQ_BOOST_LOW_BOUNDARY		300000
+#define DYNAMIC_FREQ_BOOST_STEP			2
+#define DYNAMIC_FREQ_BUCK_STEP			5
+
+static struct cpufreq_interactive_dynamic_freq dynamic_freq = {
+	.go_maxspeed_load = DYNAMIC_FREQ_GO_MAXSPEED_LOAD,
+	.go_upspeed_load = DYNAMIC_FREQ_GO_UPSPEED_LOAD,
+	.sustain_load = DYNAMIC_FREQ_SUSTAIN_LOAD,
+	.go_downspeed_load = DYNAMIC_FREQ_GO_DOWNSPEED_LOAD,
+	.boost_high_boundary = DYNAMIC_FREQ_BOOST_HIGH_BOUNDARY,
+	.boost_low_boundary = DYNAMIC_FREQ_BOOST_LOW_BOUNDARY,
+	.boost_step = DYNAMIC_FREQ_BOOST_STEP,
+	.buck_step = DYNAMIC_FREQ_BUCK_STEP,
+	.enabled = 0,
+};
+#endif /* CONFIG_DYNAMIC_FREQ_MODE */
 
 #define DEBUG 0
 #define BUFSZ 128
@@ -183,6 +237,151 @@ struct cpufreq_governor cpufreq_gov_interactive = {
 	.max_transition_latency = 10000000,
 	.owner = THIS_MODULE,
 };
+
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+#define GET_UP_FREQ(_freq_table, _freq_num, _cur_idx, _up_step)	\
+		(((int)_cur_idx + (int)_up_step) < _freq_num ?	\
+		_freq_table[_cur_idx + _up_step].frequency :	\
+		_freq_table[_freq_num - 1].frequency)
+
+#define GET_DOWN_FREQ(_freq_table, _cur_idx, _down_step)	\
+		(((int)_cur_idx - (int)_down_step) > 0 ?	\
+		_freq_table[_cur_idx - _down_step].frequency :	\
+		_freq_table[0].frequency)
+
+static int _set_param_go_downspeed_load(int idx)
+{
+	unsigned int freq = dynamic_freq.freq_table[idx].frequency;
+	unsigned int freq_1dn = GET_DOWN_FREQ(dynamic_freq.freq_table, idx, 1);
+	int downspeed_load = dynamic_freq.go_downspeed_load;
+	unsigned long dn_load;
+
+calc_downspeed_load:
+	for (dn_load = 1; dn_load <= 100; dn_load++) {
+		if ((freq_1dn * dn_load / freq) >= downspeed_load)
+			break;
+	}
+
+	if (dn_load >= 100) {
+		if (--downspeed_load > 0)
+			goto calc_downspeed_load;
+		else
+			downspeed_load = 100;
+	}
+
+	dynamic_freq.params[idx].downsustain_load = dn_load;
+	return 0;
+}
+
+static int cpufreq_interactive_dynamic_freq_alloc(void)
+{
+	int i = 0;
+
+	dynamic_freq.freq_table = cpufreq_frequency_get_table(0);
+	while (dynamic_freq.freq_table[i].frequency != CPUFREQ_TABLE_END)
+		i++;
+	dynamic_freq.freq_num = i;
+
+	dynamic_freq.params = kzalloc(sizeof(struct dynamic_freq_param) * i,
+				      GFP_KERNEL);
+	if (!dynamic_freq.params) {
+		pr_err("%s: Failed to alloc memory for params\n", __func__);
+		return -ENOMEM;
+	}
+	return 0;
+}
+
+static void cpufreq_interactive_dynamic_freq_free(void)
+{
+	kfree(dynamic_freq.params);
+}
+
+static int cpufreq_interactive_dynamic_freq_init(unsigned long enable)
+{
+	int i;
+
+	if (!enable)
+		goto out;
+
+	for (i = 0; i < dynamic_freq.freq_num; i++) {
+		if (dynamic_freq.freq_table[i].frequency
+				== CPUFREQ_ENTRY_INVALID)
+			continue;
+		_set_param_go_downspeed_load(i);
+	}
+
+out:
+	dynamic_freq.enabled = enable;
+	return 0;
+}
+
+static unsigned int cpufreq_interactive_dynamic_freq_get_target(
+	int cpu_load, int load_since_change, struct cpufreq_policy *policy)
+{
+	struct cpufreq_interactive_cpuinfo *pcpu =
+			&per_cpu(cpuinfo, policy->cpu);
+	struct cpufreq_frequency_table *freq_table = dynamic_freq.freq_table;
+	unsigned int freq_num = dynamic_freq.freq_num;
+	unsigned long low_boundary = dynamic_freq.boost_low_boundary;
+	unsigned long high_boundary = dynamic_freq.boost_high_boundary;
+	unsigned long downsustain_load = 1;
+	unsigned int target_freq;
+	int i, freq_idx = 0;
+
+	/*
+	 * Choose greater of short-term load (since last idle timer
+	 * started or timer function re-armed itself) or long-term load
+	 * (since last frequency change).
+	 */
+	if (load_since_change > cpu_load)
+		cpu_load = load_since_change;
+
+	for (i = 0; i < freq_num; i++) {
+		if (policy->cur == freq_table[i].frequency) {
+			downsustain_load =
+				dynamic_freq.params[i].downsustain_load;
+			freq_idx = i;
+			break;
+		} else if (policy->cur > freq_table[i].frequency) {
+			downsustain_load =
+				dynamic_freq.params[i].downsustain_load;
+			freq_idx = i;
+		}
+	}
+
+	if (cpu_load >= dynamic_freq.go_maxspeed_load) {
+		if ((!pcpu->boosted && policy->cur <= high_boundary) ||
+				(policy->cur <= low_boundary))
+			target_freq = GET_UP_FREQ(freq_table, freq_num,
+					freq_idx, dynamic_freq.boost_step);
+		else
+			target_freq = GET_UP_FREQ(freq_table, freq_num,
+					freq_idx, 1);
+
+		if (policy->cur > low_boundary)
+			pcpu->boosted++;
+	} else {
+		if (cpu_load >= dynamic_freq.go_upspeed_load) {
+			target_freq = GET_UP_FREQ(freq_table, freq_num,
+					freq_idx, 1);
+		} else if (cpu_load >= dynamic_freq.sustain_load) {
+			target_freq = policy->cur;
+		} else if (cpu_load >= dynamic_freq.go_downspeed_load) {
+			target_freq = GET_DOWN_FREQ(freq_table, freq_idx, 1);
+		} else {
+			unsigned int buck_freq = GET_DOWN_FREQ(freq_table,
+					freq_idx, dynamic_freq.buck_step);
+			target_freq = policy->cur * cpu_load / downsustain_load;
+			if (target_freq < buck_freq)
+				target_freq = buck_freq;
+		}
+		pcpu->boosted = 0;
+	}
+
+	target_freq = min(target_freq, policy->max);
+	return target_freq;
+}
+#endif /* CONFIG_DYNAMIC_FREQ_MODE */
 
 static unsigned int cpufreq_interactive_get_target(
 	int cpu_load, int load_since_change, struct cpufreq_policy *policy)
@@ -324,6 +523,12 @@ static void cpufreq_interactive_timer(unsigned long data)
 	 * function re-armed itself) and long-term load (since last frequency
 	 * change) to determine new target frequency
 	 */
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+	if (dynamic_freq.enabled)
+		new_freq = cpufreq_interactive_dynamic_freq_get_target(cpu_load,
+					load_since_change, pcpu->policy);
+	else
+#endif
 	new_freq = cpufreq_interactive_get_target(cpu_load, load_since_change,
 						  pcpu->policy);
 
@@ -713,6 +918,34 @@ static ssize_t store_min_sample_time(struct kobject *kobj,
 static struct global_attr min_sample_time_attr = __ATTR(min_sample_time, 0644,
 		show_min_sample_time, store_min_sample_time);
 
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+static ssize_t show_dynamic_freq_mode(struct kobject *kobj,
+			struct attribute *attr, char *buf)
+{
+	return sprintf(buf, "%lu\n", dynamic_freq.enabled);
+}
+
+static ssize_t store_dynamic_freq_mode(struct kobject *kobj,
+			struct attribute *attr, const char *buf, size_t count)
+{
+	unsigned long val;
+	int ret;
+
+	ret = strict_strtoul(buf, 0, &val);
+	if (ret < 0)
+		return ret;
+
+	if (val == dynamic_freq.enabled)
+		return count;
+
+	cpufreq_interactive_dynamic_freq_init(val);
+	return count;
+}
+
+static struct global_attr dynamic_freq_mode_attr = __ATTR(dynamic_freq_mode,
+		0644, show_dynamic_freq_mode, store_dynamic_freq_mode);
+#endif /* CONFIG_DYNAMIC_FREQ_MODE */
+
 static struct attribute *interactive_attributes[] = {
 	&go_maxspeed_load_attr.attr,
 	&boost_factor_attr.attr,
@@ -720,6 +953,9 @@ static struct attribute *interactive_attributes[] = {
 	&io_is_busy_attr.attr,
 	&sustain_load_attr.attr,
 	&min_sample_time_attr.attr,
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+	&dynamic_freq_mode_attr.attr,
+#endif
 	NULL,
 };
 
@@ -772,6 +1008,9 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *new_policy,
 
 		pm_idle_old = pm_idle;
 		pm_idle = cpufreq_interactive_idle;
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+		cpufreq_interactive_dynamic_freq_init(dynamic_freq.enabled);
+#endif
 		break;
 
 	case CPUFREQ_GOV_STOP:
@@ -813,6 +1052,9 @@ static int __init cpufreq_interactive_init(void)
 	unsigned int i;
 	struct cpufreq_interactive_cpuinfo *pcpu;
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+	int ret;
+#endif
 
 	go_maxspeed_load = DEFAULT_GO_MAXSPEED_LOAD;
 	min_sample_time = DEFAULT_MIN_SAMPLE_TIME;
@@ -825,10 +1067,20 @@ static int __init cpufreq_interactive_init(void)
 		pcpu->cpu_timer.data = i;
 	}
 
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+	ret = cpufreq_interactive_dynamic_freq_alloc();
+	if (ret < 0)
+		return ret;
+#endif
+
 	up_task = kthread_create(cpufreq_interactive_up_task, NULL,
 				 "kinteractiveup");
-	if (IS_ERR(up_task))
+	if (IS_ERR(up_task)) {
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+		cpufreq_interactive_dynamic_freq_free();
+#endif
 		return PTR_ERR(up_task);
+	}
 
 	sched_setscheduler_nocheck(up_task, SCHED_FIFO, &param);
 	get_task_struct(up_task);
@@ -856,6 +1108,9 @@ static int __init cpufreq_interactive_init(void)
 
 err_freeuptask:
 	put_task_struct(up_task);
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+	cpufreq_interactive_dynamic_freq_free();
+#endif
 	return -ENOMEM;
 }
 
@@ -871,6 +1126,9 @@ static void __exit cpufreq_interactive_exit(void)
 	kthread_stop(up_task);
 	put_task_struct(up_task);
 	destroy_workqueue(down_wq);
+#ifdef CONFIG_DYNAMIC_FREQ_MODE
+	cpufreq_interactive_dynamic_freq_free();
+#endif
 }
 
 module_exit(cpufreq_interactive_exit);
