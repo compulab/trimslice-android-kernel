@@ -455,7 +455,7 @@ static int tegra_i2c_init(struct tegra_i2c_dev *i2c_dev)
 	if (tegra_i2c_flush_fifos(i2c_dev))
 		err = -ETIMEDOUT;
 
-	pm_runtime_put(i2c_dev->dev);
+	pm_runtime_put_sync(i2c_dev->dev);
 
 	if (i2c_dev->irq_disabled) {
 		i2c_dev->irq_disabled = 0;
@@ -740,7 +740,7 @@ static int tegra_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[],
 	}
 
 
-	pm_runtime_put(i2c_dev->dev);
+	pm_runtime_put_sync(i2c_dev->dev);
 
 	rt_mutex_unlock(&i2c_dev->dev_lock);
 
