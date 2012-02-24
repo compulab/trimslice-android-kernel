@@ -51,10 +51,10 @@ static const struct snd_pcm_hardware tegra_pcm_hardware = {
 	.channels_min		= 1,
 	.channels_max		= 2,
 	.period_bytes_min	= 128,
-	.period_bytes_max	= PAGE_SIZE,
+	.period_bytes_max	= 0x10000,//PAGE_SIZE,
 	.periods_min		= 2,
-	.periods_max		= 8,
-	.buffer_bytes_max	= PAGE_SIZE * 8,
+	.periods_max		= 4,
+	.buffer_bytes_max	= 0x20000,//PAGE_SIZE * 8,
 	.fifo_size		= 4,
 };
 
