@@ -1388,6 +1388,10 @@ static int _regulator_disable(struct regulator_dev *rdev)
 {
 	int ret = 0;
 
+	/* dummy regulator might be unbalanced */
+	if (!strcmp("dummy", rdev_get_name(rdev))) {
+		return 0;
+	}
 	if (WARN(rdev->use_count <= 0,
 		 "unbalanced disables for %s\n", rdev_get_name(rdev)))
 		return -EIO;

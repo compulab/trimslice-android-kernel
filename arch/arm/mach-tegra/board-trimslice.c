@@ -415,10 +415,9 @@ int __init trimslice_pm_init(void)
 
 static void __init tegra_trimslice_init(void)
 {
-	//trimslice_pm_init();
+	trimslice_pm_init();
 
 	tegra_clk_init_from_table(trimslice_clk_init_table);
-
 
 	trimslice_pinmux_init();
 
