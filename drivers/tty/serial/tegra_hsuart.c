@@ -192,8 +192,6 @@ static void tegra_start_pio_tx(struct tegra_uart_port *t, unsigned int bytes)
 	if (bytes > TEGRA_UART_FIFO_SIZE)
 		bytes = TEGRA_UART_FIFO_SIZE;
 
-	dma_sync_single_for_cpu(t->uport.dev, t->xmit_dma_addr,
-			UART_XMIT_SIZE, DMA_FROM_DEVICE);
 	t->fcr_shadow &= ~UART_FCR_T_TRIG_11;
 	t->fcr_shadow |= TEGRA_UART_TX_TRIG_8B;
 	uart_writeb(t, t->fcr_shadow, UART_FCR);
