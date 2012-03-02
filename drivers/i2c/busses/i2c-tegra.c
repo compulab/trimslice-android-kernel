@@ -454,11 +454,6 @@ static irqreturn_t tegra_i2c_isr(int irq, void *dev_id)
 						i2c_dev->msg_add);
 		i2c_dev->msg_err |= I2C_ERR_UNKNOWN_INTERRUPT;
 
-		if (!i2c_dev->irq_disabled) {
-			disable_irq_nosync(i2c_dev->irq);
-			i2c_dev->irq_disabled = 1;
-		}
-
 		goto err;
 	}
 
