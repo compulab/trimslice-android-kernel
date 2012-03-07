@@ -81,6 +81,8 @@ const char *tegra_aic326x_i2s_dai_name[TEGRA30_NR_I2S_IFC] = {
 };
 #endif
 
+extern int g_is_call_mode;
+
 struct tegra_aic326x {
 	struct tegra_asoc_utils_data util_data;
 	struct tegra_aic326x_platform_data *pdata;
@@ -184,6 +186,7 @@ static int tegra_aic326x_call_mode_put(struct snd_kcontrol *kcontrol,
 	}
 
 	machine->is_call_mode = is_call_mode_new;
+	g_is_call_mode = machine->is_call_mode;
 
 	return 1;
 }
