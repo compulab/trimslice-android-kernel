@@ -53,7 +53,6 @@ struct tegra_otg_data {
 	struct platform_device *pdev;
 	struct work_struct work;
 	unsigned int intr_reg_data;
-	bool detect_vbus;
 	bool clk_enabled;
 };
 static struct tegra_otg_data *tegra_clone;
@@ -171,12 +170,6 @@ static void irq_work(struct work_struct *work)
 	unsigned long flags;
 	unsigned long status;
 
-	if (tegra->detect_vbus) {
-		tegra->detect_vbus = false;
-		tegra_otg_enable_clk();
-		return;
-	}
-
 	clk_enable(tegra->clk);
 
 	spin_lock_irqsave(&tegra->lock, flags);
@@ -239,7 +232,6 @@ static irqreturn_t tegra_otg_irq(int irq, void *data)
 		otg_writel(tegra, val, USB_PHY_WAKEUP);
 		if ((val & USB_ID_INT_STATUS) || (val & USB_VBUS_INT_STATUS)) {
 			tegra->int_status = val;
-			tegra->detect_vbus = false;
 			schedule_work(&tegra->work);
 		}
 	}
@@ -251,8 +243,7 @@ static irqreturn_t tegra_otg_irq(int irq, void *data)
 
 void tegra_otg_check_vbus_detection(void)
 {
-	tegra_clone->detect_vbus = true;
-	schedule_work(&tegra_clone->work);
+	tegra_otg_enable_clk();
 }
 EXPORT_SYMBOL(tegra_otg_check_vbus_detection);
 
@@ -284,7 +275,6 @@ static int tegra_otg_set_peripheral(struct otg_transceiver *otg,
 
 	if ((val & USB_ID_INT_STATUS) || (val & USB_VBUS_INT_STATUS)) {
 		tegra->int_status = val;
-		tegra->detect_vbus = false;
 		schedule_work (&tegra->work);
 	}
 
