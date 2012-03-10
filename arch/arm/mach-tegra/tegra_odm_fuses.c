@@ -81,7 +81,7 @@ static struct kobj_attribute jtagdis_attr =
 	__ATTR(jtag_disable, 0440, fuse_show, fuse_store);
 
 static struct kobj_attribute odm_prod_mode_attr =
-	__ATTR(odm_production_mode, 0440, fuse_show, fuse_store);
+	__ATTR(odm_production_mode, 0444, fuse_show, fuse_store);
 
 static struct kobj_attribute sec_boot_dev_cfg_attr =
 	__ATTR(sec_boot_dev_cfg, 0440, fuse_show, fuse_store);
@@ -877,14 +877,13 @@ static int __init tegra_fuse_program_init(void)
 	{
 		devkey_attr.attr.mode = 0640;
 		jtagdis_attr.attr.mode = 0640;
-		odm_prod_mode_attr.attr.mode = 0640;
 		sec_boot_dev_cfg_attr.attr.mode = 0640;
 		sec_boot_dev_sel_attr.attr.mode = 0640;
 		sbk_attr.attr.mode = 0640;
 		sw_rsvd_attr.attr.mode = 0640;
 		ignore_dev_sel_straps_attr.attr.mode = 0640;
 		odm_rsvd_attr.attr.mode = 0640;
-		odm_prod_mode_attr.attr.mode = 0640;
+		odm_prod_mode_attr.attr.mode = 0644;
 	}
 
 	CHK_ERR(sysfs_create_file(fuse_kobj, &odm_prod_mode_attr.attr));
