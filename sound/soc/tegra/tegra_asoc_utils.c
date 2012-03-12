@@ -40,8 +40,7 @@ bool tegra_is_voice_call_active()
 }
 EXPORT_SYMBOL_GPL(tegra_is_voice_call_active);
 
-int tegra_asoc_utils_set_rate(struct tegra_asoc_utils_data *data, int srate,
-			      int mclk)
+int tegra_asoc_utils_set_rate(struct tegra_asoc_utils_data *data, int srate, int mclk)
 {
 	int new_baseclock;
 	bool clk_change;
