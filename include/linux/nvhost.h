@@ -95,6 +95,9 @@ struct nvhost_device {
 	void (*init)(struct nvhost_device *dev);
 	/* Device is de-initialized. */
 	void (*deinit)(struct nvhost_device *dev);
+	struct nvhost_master	*host;
+	struct device		*dev_neighbour;
+
 };
 
 /* Register device to nvhost bus */
@@ -132,5 +135,6 @@ extern int nvhost_get_irq_byname(struct nvhost_device *, const char *);
 		dev_get_drvdata((_dev)->dev.parent))
 
 int nvhost_bus_add_host(struct nvhost_master *host);
+int nvhost_bus_register(struct nvhost_master *host);
 
 #endif

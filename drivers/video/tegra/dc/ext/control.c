@@ -67,7 +67,7 @@ static int get_output_edid(struct tegra_dc_ext_control_output_edid *edid)
 	struct tegra_dc *dc;
 	size_t user_size = edid->size;
 	struct tegra_dc_edid *dc_edid = NULL;
-	int ret;
+    int ret;
 
 	/* TODO: this should be more dynamic */
 	if (edid->handle > 2)
@@ -168,6 +168,8 @@ static long tegra_dc_ext_control_ioctl(struct file *filp, unsigned int cmd,
 			return -EFAULT;
 
 		ret = get_output_edid(&args);
+		if (ret)
+			return ret;
 
 		if (copy_to_user(user_arg, &args, sizeof(args)))
 			return -EFAULT;

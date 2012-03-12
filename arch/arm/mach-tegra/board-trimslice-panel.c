@@ -267,10 +267,10 @@ int __init trimslice_panel_init(void)
 	   This is required as the devices use mutual resource (PLL_D)
 	   and should be aware of the neighbour requirement.
 	 */
-	// trimslice_disp1_device.dev_neighbour =
-	// 	(struct device *) &trimslice_disp2_device;
-	// trimslice_disp2_device.dev_neighbour
-	// 	= (struct device *) &trimslice_disp1_device;
+	trimslice_disp1_device.dev_neighbour =
+		(struct device *) &trimslice_disp2_device;
+	trimslice_disp2_device.dev_neighbour
+		= (struct device *) &trimslice_disp1_device;
 
 	((struct tegra_dc_platform_data*)
 		(trimslice_disp1_device.dev.platform_data))->default_mode =

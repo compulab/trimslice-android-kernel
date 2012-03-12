@@ -1,7 +1,7 @@
 /*
  * drivers/video/tegra/dc/hdmi.c
  *
- * Copyright (C) 2010 Google, Inc.
+ * Copyright (C) 2010, 2011 Google, Inc.
  * Author: Erik Gilling <konkers@android.com>
  *
  * Copyright (C) 2010-2011 NVIDIA Corporation
@@ -48,6 +48,7 @@
 #include "hdmi.h"
 #include "edid.h"
 #include "nvhdcp.h"
+#include "tegra_dc_res.h"
 
 /* datasheet claims this will always be 216MHz */
 #define HDMI_AUDIOCLK_FREQ		216000000
@@ -69,7 +70,6 @@
 
 struct tegra_dc_hdmi_data {
 	struct tegra_dc			*dc;
-	struct tegra_edid		*edid;
 	struct tegra_edid_hdmi_eld		eld;
 	struct tegra_nvhdcp		*nvhdcp;
 	struct delayed_work		work;
@@ -102,6 +102,7 @@ struct tegra_dc_hdmi_data {
 struct tegra_dc_hdmi_data *dc_hdmi;
 
 const struct fb_videomode tegra_dc_hdmi_supported_modes[] = {
+
 	/* 1280x720p 60hz: EIA/CEA-861-B Format 4 */
 	{
 		.xres =		1280,
@@ -208,6 +209,7 @@ const struct fb_videomode tegra_dc_hdmi_supported_modes[] = {
 		.vmode =	FB_VMODE_NONINTERLACED,
 		.sync = FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
 	},
+
 	/* 1920x1080p 59.94/60hz EIA/CEA-861-B Format 16 */
 	{
 		.xres =		1920,
@@ -388,6 +390,19 @@ const struct tegra_hdmi_audio_config tegra_hdmi_audio_192k[] = {
 	{148500000,	24576,	148500,	24000},
 	{0,		0,	0},
 };
+
+typedef struct {
+	unsigned int c;
+	struct {
+		u32 refresh;
+		u32 xres;
+		u32 yres;
+	} res[32];
+} resolutions_t;
+
+static void tegra_dc_hdmi_enable(struct tegra_dc *dc);
+extern int tegra_dc_check_best_rate(struct tegra_dc_mode *mode);
+extern void tegra_dc_create_default_monspecs(int default_mode, struct fb_monspecs *specs);
 
 static const struct tegra_hdmi_audio_config
 *tegra_hdmi_get_audio_config(unsigned audio_freq, unsigned pix_clock)
@@ -672,8 +687,8 @@ static int tegra_dc_calc_clock_per_frame(const struct fb_videomode *mode)
 	       (mode->upper_margin + mode->yres +
 		mode->lower_margin + mode->vsync_len);
 }
-static bool tegra_dc_hdmi_mode_equal(const struct fb_videomode *mode1,
-					const struct fb_videomode *mode2)
+
+static bool tegra_dc_hdmi_mode_equal(const struct fb_videomode *mode1, const struct fb_videomode *mode2)
 {
 	int clock_per_frame1 = tegra_dc_calc_clock_per_frame(mode1);
 	int clock_per_frame2 = tegra_dc_calc_clock_per_frame(mode2);
@@ -703,30 +718,54 @@ static bool tegra_dc_hdmi_valid_pixclock(const struct tegra_dc *dc,
 	}
 }
 
-static bool tegra_dc_hdmi_mode_filter(const struct tegra_dc *dc,
-					struct fb_videomode *mode)
+#define HDMI_DC_MAX_HORIZONTAL_RESOLUTION 1920
+#define HDMI_DC_MAX_VERTICAL_RESOLUTION 1080
+#define HDMI_DC_MIN_REFRESH_RATE 50
+
+static bool tegra_dc_hdmi_mode_filter(const struct tegra_dc *dc, struct fb_videomode *mode)
 {
 	int i;
 	int clock_per_frame;
+    struct tegra_dc_mode dc_mode;
+	bool mode_supported = false;
 
+    /* sanity check for EDID modes */
 	if (!mode->pixclock)
 		return false;
 
 	for (i = 0; i < ARRAY_SIZE(tegra_dc_hdmi_supported_modes); i++) {
-		const struct fb_videomode *supported_mode
-				= &tegra_dc_hdmi_supported_modes[i];
-		if (tegra_dc_hdmi_mode_equal(supported_mode, mode) &&
-		    tegra_dc_hdmi_valid_pixclock(dc, supported_mode)) {
+		const struct fb_videomode *supported_mode = &tegra_dc_hdmi_supported_modes[i];
+		if (tegra_dc_hdmi_mode_equal(supported_mode, mode) && tegra_dc_hdmi_valid_pixclock(dc, supported_mode)) {
 			memcpy(mode, supported_mode, sizeof(*mode));
 			mode->flag = FB_MODE_IS_DETAILED;
-			clock_per_frame = tegra_dc_calc_clock_per_frame(mode);
-			mode->refresh = (PICOS2KHZ(mode->pixclock) * 1000)
-					/ clock_per_frame;
-			return true;
-		}
-	}
+        }
 
-	return false;
+        clock_per_frame = tegra_dc_calc_clock_per_frame(mode);
+        if (clock_per_frame != 0) {
+            mode->refresh = (PICOS2KHZ(mode->pixclock) * 1000) / clock_per_frame;
+        }
+    }
+
+	if (mode->refresh < HDMI_DC_MIN_REFRESH_RATE)
+		return false;
+
+	dc_mode.pclk = PICOS2KHZ(mode->pixclock) * 1000;
+	dc_mode.h_active = mode->xres;
+	dc_mode.v_active = mode->yres;
+
+	if (tegra_dc_check_pll_rate(dc, &dc_mode) > 0)
+		mode_supported = true;
+
+	if (mode->xres > HDMI_DC_MAX_HORIZONTAL_RESOLUTION ||
+		mode->yres > HDMI_DC_MAX_VERTICAL_RESOLUTION)
+		mode_supported = false;
+
+	pr_info("\t%dx%d-%d (pclk=%d) -> %s\n",
+		dc_mode.h_active, dc_mode.v_active,
+		mode->refresh, dc_mode.pclk,
+		mode_supported ? "supported" : "rejected");
+
+	return mode_supported;
 }
 
 
@@ -743,29 +782,119 @@ static bool tegra_dc_hdmi_hpd(struct tegra_dc *dc)
 		(sense == TEGRA_DC_OUT_HOTPLUG_LOW && !level);
 }
 
-
-void tegra_dc_hdmi_detect_config(struct tegra_dc *dc,
-						struct fb_monspecs *specs)
+static int hdmi_diagnostics(struct seq_file *s, void *data)
 {
-	struct tegra_dc_hdmi_data *hdmi = tegra_dc_get_outdata(dc);
+	int i = 0;
+	resolutions_t *resolutions = s->private;
+	for (i = 0 ; i < resolutions->c ; i++) {
+		seq_printf(s, "%d %d %d\n", resolutions->res[i].xres,
+					resolutions->res[i].yres,
+					resolutions->res[i].refresh);
+	}
+	return 0;
+}
 
-	/* monitors like to lie about these but they are still useful for
-	 * detecting aspect ratios
-	 */
-	dc->out->h_size = specs->max_x * 1000;
-	dc->out->v_size = specs->max_y * 1000;
+static int hdmi_diagnostics_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, hdmi_diagnostics, inode->i_private);
+}
 
-	hdmi->dvi = !(specs->misc & FB_MISC_HDMI);
+static const struct file_operations hdmi_debug_fops = {
+	.open		= hdmi_diagnostics_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
 
-	tegra_fb_update_monspecs(dc->fb, specs, tegra_dc_hdmi_mode_filter);
+static int setup_read(struct seq_file *s, void *data)
+{
+static char setup_buffer[] = {TEGRA_DC_RES};
+	seq_printf(s, "%s", &setup_buffer[0]);
+	return 0;
+}
+
+static int setup_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, setup_read, inode->i_private);
+}
+
+static const struct file_operations setup_debug_fops = {
+	.open		= setup_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+void tegra_hdmi_update_debugfs(struct tegra_dc *dc, struct fb_monspecs *specs)
+{
+	int i;
+	static resolutions_t resolutions = { .c = 0 };
+	struct dentry *debug_dir = NULL;
+	struct dentry *debug_file = NULL;
+
+	debug_file = debugfs_create_file("tegra_dc_res", S_IRUSR|S_IRGRP|S_IXUSR|S_IXGRP,
+									 debug_dir, NULL, &setup_debug_fops);
+
+	debug_file = debugfs_create_file("tegra_dc_hdmi_res", S_IRUSR|S_IRGRP,
+									 debug_dir, &resolutions, &hdmi_debug_fops);
+
+
+	resolutions.c = 0;
+	for (i = 0; i < specs->modedb_len; i++) {
+		struct fb_videomode *mode = &specs->modedb[i];
+		if (tegra_dc_hdmi_mode_filter(dc, mode)) {
+				if (resolutions.c < 32) {
+					resolutions.res[resolutions.c].refresh = mode->refresh;
+					resolutions.res[resolutions.c].xres = mode->xres;
+					resolutions.res[resolutions.c].yres = mode->yres;
+					resolutions.c++;
+				}
+		}
+	}
+}
+
+void tegra_dc_hdmi_detect_config(struct tegra_dc *dc, struct fb_monspecs *specs)
+{
+    struct tegra_dc_hdmi_data *hdmi = tegra_dc_get_outdata(dc);
+    struct tegra_dc *rgb_dc;
+
+    /* monitors like to lie about these but they are still useful for
+     * detecting aspect ratios
+     */
+    dc->out->h_size = specs->max_x * 1000;
+    dc->out->v_size = specs->max_y * 1000;
+
+    hdmi->dvi = !(specs->misc & FB_MISC_HDMI);
+
+    dev_info(&dc->ndev->dev, "detecting best mode using EDID:\n");
+    tegra_fb_update_monspecs(dc->fb, specs, tegra_dc_hdmi_mode_filter);
+    tegra_hdmi_update_debugfs(dc, specs);
 #ifdef CONFIG_SWITCH
-	hdmi->hpd_switch.state = 0;
-	switch_set_state(&hdmi->hpd_switch, 1);
+    hdmi->hpd_switch.state = 0;
+    switch_set_state(&hdmi->hpd_switch, 1);
 #endif
-	dev_info(&dc->ndev->dev, "display detected\n");
+    dev_info(&dc->ndev->dev, "display detected\n");
 
-	dc->connected = true;
-	tegra_dc_ext_process_hotplug(dc->ndev->id);
+    /* Notify RGB dc of HDMI dc presence and its PLL_D selection.
+     * We want to give priority for HDMI as it can generate 1080p resolution
+     */
+    rgb_dc = (struct tegra_dc *)nvhost_get_drvdata ((struct nvhost_device *)dc->ndev->dev_neighbour);
+    if (rgb_dc != NULL) {
+        if (rgb_dc->connected) {
+            dev_info(&dc->ndev->dev,"warning: both HDMI and DVI "\
+                     "displays are detected.\n Adjusting DVI resolutions to "\
+                     "preserve HDMI PLL_D selection "\
+                     "(pll_d=%d, HDMI mode:%dx%d)",
+                     tegra_dc_check_pll_rate(dc, &dc->mode), dc->mode.h_active, dc->mode.v_active);
+
+            rgb_dc->predefined_pll_rate = tegra_dc_check_pll_rate(dc, &dc->mode);
+
+            rgb_dc->out_ops->detect(rgb_dc);
+        }
+    }
+
+    dc->connected = true;
+    tegra_dc_ext_process_hotplug(dc->ndev->id);
 }
 
 /* This function is used to enable DC1 and HDMI for the purpose of testing. */
@@ -775,18 +904,18 @@ bool tegra_dc_hdmi_detect_test(struct tegra_dc *dc, unsigned char *edid_ptr)
 	struct fb_monspecs specs;
 	struct tegra_dc_hdmi_data *hdmi = tegra_dc_get_outdata(dc);
 
-	if (!hdmi || !edid_ptr) {
+	if (!dc || !hdmi || !edid_ptr) {
 		dev_err(&dc->ndev->dev, "HDMI test failed to get arguments.\n");
 		return false;
 	}
 
-	err = tegra_edid_get_monspecs_test(hdmi->edid, &specs, edid_ptr);
+	err = tegra_edid_get_monspecs_test(dc->edid, &specs, edid_ptr);
 	if (err < 0) {
 		dev_err(&dc->ndev->dev, "error reading edid\n");
 		goto fail;
 	}
 
-	err = tegra_edid_get_eld(hdmi->edid, &hdmi->eld);
+	err = tegra_edid_get_eld(dc->edid, &hdmi->eld);
 	if (err < 0) {
 		dev_err(&dc->ndev->dev, "error populating eld\n");
 		goto fail;
@@ -816,13 +945,17 @@ static bool tegra_dc_hdmi_detect(struct tegra_dc *dc)
 	if (!tegra_dc_hdmi_hpd(dc))
 		goto fail;
 
-	err = tegra_edid_get_monspecs(hdmi->edid, &specs);
-	if (err < 0) {
+	err = tegra_edid_get_monspecs(dc->edid, &specs);
+	if (err < 0 && !dc->pdata->default_mode) {
 		dev_err(&dc->ndev->dev, "error reading edid\n");
 		goto fail;
 	}
+    else if (dc->pdata->default_mode) {
+        dev_info(&dc->ndev->dev,"ignore EDID data, using the default HDMI resolutions");
+		tegra_dc_create_default_monspecs(dc->pdata->default_mode, &specs);
+    }
 
-	err = tegra_edid_get_eld(hdmi->edid, &hdmi->eld);
+	err = tegra_edid_get_eld(dc->edid, &hdmi->eld);
 	if (err < 0) {
 		dev_err(&dc->ndev->dev, "error populating eld\n");
 		goto fail;
@@ -868,7 +1001,7 @@ static irqreturn_t tegra_dc_hdmi_irq(int irq, void *ptr)
 
 	spin_lock_irqsave(&hdmi->suspend_lock, flags);
 	if (!hdmi->suspended) {
-		__cancel_delayed_work(&hdmi->work);
+		cancel_delayed_work(&hdmi->work);
 		if (tegra_dc_hdmi_hpd(dc))
 			queue_delayed_work(system_nrt_wq, &hdmi->work,
 					   msecs_to_jiffies(100));
@@ -917,11 +1050,14 @@ static ssize_t underscan_show(struct device *dev,
 #ifdef CONFIG_SWITCH
 	struct tegra_dc_hdmi_data *hdmi =
 			container_of(dev_get_drvdata(dev), struct tegra_dc_hdmi_data, hpd_switch);
-
+	return 0;
+/*
 	if (hdmi->edid)
 		return sprintf(buf, "%d\n", tegra_edid_underscan_supported(hdmi->edid));
 	else
 		return 0;
+*/
+
 #else
 	return 0;
 #endif
@@ -1020,12 +1156,7 @@ static int tegra_dc_hdmi_init(struct tegra_dc *dc)
 		goto err_put_clock;
 	}
 
-	hdmi->edid = tegra_edid_create(dc->out->dcc_bus);
-	if (IS_ERR_OR_NULL(hdmi->edid)) {
-		dev_err(&dc->ndev->dev, "hdmi: can't create edid\n");
-		err = PTR_ERR(hdmi->edid);
-		goto err_free_irq;
-	}
+
 
 #ifdef CONFIG_TEGRA_NVHDCP
 	hdmi->nvhdcp = tegra_nvhdcp_create(hdmi, dc->ndev->id,
@@ -1033,7 +1164,7 @@ static int tegra_dc_hdmi_init(struct tegra_dc *dc)
 	if (IS_ERR_OR_NULL(hdmi->nvhdcp)) {
 		dev_err(&dc->ndev->dev, "hdmi: can't create nvhdcp\n");
 		err = PTR_ERR(hdmi->nvhdcp);
-		goto err_edid_destroy;
+		goto err_free_irq;
 	}
 #else
 	hdmi->nvhdcp = NULL;
@@ -1082,10 +1213,6 @@ static int tegra_dc_hdmi_init(struct tegra_dc *dc)
 
 	return 0;
 
-#ifdef CONFIG_TEGRA_NVHDCP
-err_edid_destroy:
-#endif
-	tegra_edid_destroy(hdmi->edid);
 err_free_irq:
 	free_irq(gpio_to_irq(dc->out->hotplug_gpio), dc);
 err_put_clock:
@@ -1131,7 +1258,6 @@ static void tegra_dc_hdmi_destroy(struct tegra_dc *dc)
 	clk_put(hdmi->clk);
 	clk_put(hdmi->disp1_clk);
 	clk_put(hdmi->disp2_clk);
-	tegra_edid_destroy(hdmi->edid);
 	tegra_nvhdcp_destroy(hdmi->nvhdcp);
 
 	kfree(hdmi);
@@ -1614,6 +1740,9 @@ static void tegra_dc_hdmi_enable(struct tegra_dc *dc)
 	unsigned i;
 	unsigned long oldrate;
 
+	pr_info("HDMI out enable: %dx%d (pclk=%d)\n",
+		dc->mode.h_active, dc->mode.v_active, dc->mode.pclk);
+
 	/* enbale power, clocks, resets, etc. */
 
 	/* The upstream DC needs to be clocked for accesses to HDMI to not
@@ -1849,15 +1978,7 @@ struct tegra_dc_out_ops tegra_dc_hdmi_ops = {
 
 struct tegra_dc_edid *tegra_dc_get_edid(struct tegra_dc *dc)
 {
-	struct tegra_dc_hdmi_data *hdmi;
-
-	/* TODO: Support EDID on non-HDMI devices */
-	if (dc->out->type != TEGRA_DC_OUT_HDMI)
-		return ERR_PTR(-ENODEV);
-
-	hdmi = tegra_dc_get_outdata(dc);
-
-	return tegra_edid_get_data(hdmi->edid);
+	return tegra_edid_get_data(dc->edid);
 }
 EXPORT_SYMBOL(tegra_dc_get_edid);
 

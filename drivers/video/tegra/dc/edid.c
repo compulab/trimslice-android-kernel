@@ -17,7 +17,6 @@
  *
  */
 
-
 #include <linux/debugfs.h>
 #include <linux/fb.h>
 #include <linux/i2c.h>
@@ -411,6 +410,38 @@ fail:
 	return ret;
 }
 
+int tegra_edid_read_raw(struct tegra_edid *edid, int *size, u8 *data)
+{
+	int i;
+	int ret;
+	int extension_blocks;
+
+	ret = tegra_edid_read_block(edid, 0, data);
+	if (ret)
+		return ret;
+
+	extension_blocks = data[0x7e];
+
+	for (i = 1; i <= extension_blocks; i++) {
+		ret = tegra_edid_read_block(edid, i, data + i * 128);
+		if (ret < 0)
+			break;
+	}
+
+	*size = i * 128;
+	return 0;
+}
+
+#if 0   /* code incomplete: missing kref_{get|put} etc. [andrey] */
+static int tegra_edid_read(struct tegra_edid *edid)
+{
+    int ret = tegra_edid_read_raw(edid, &edid->data->dc_edid.len, edid->data->dc_edid.buf);
+    if ( !ret )
+        tegra_edid_dump(edid);
+	return ret;
+}
+#endif
+
 int tegra_edid_get_monspecs(struct tegra_edid *edid, struct fb_monspecs *specs)
 {
 	int i;
@@ -430,7 +461,7 @@ int tegra_edid_get_monspecs(struct tegra_edid *edid, struct fb_monspecs *specs)
 
 	data = new_data->dc_edid.buf;
 
-	ret = tegra_edid_read_block(edid, 0, data);
+	ret = tegra_edid_read_raw(edid, &extension_blocks, data);
 	if (ret)
 		goto fail;
 
@@ -448,13 +479,7 @@ int tegra_edid_get_monspecs(struct tegra_edid *edid, struct fb_monspecs *specs)
 	new_data->eld.manufacture_id[0] = data[0xA];
 	new_data->eld.manufacture_id[1] = data[0xB];
 
-	extension_blocks = data[0x7e];
-
 	for (i = 1; i <= extension_blocks; i++) {
-		ret = tegra_edid_read_block(edid, i, data + i * 128);
-		if (ret < 0)
-			break;
-
 		if (data[i * 128] == 0x2) {
 			fb_edid_add_monspecs(data + i * 128, specs);
 

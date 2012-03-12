@@ -54,6 +54,7 @@ int tegra_edid_get_monspecs_test(struct tegra_edid *edid,
 				struct fb_monspecs *specs, u8 *edid_ptr);
 int tegra_edid_get_monspecs(struct tegra_edid *edid, struct fb_monspecs *specs);
 int tegra_edid_get_eld(struct tegra_edid *edid, struct tegra_edid_hdmi_eld *elddata);
+int tegra_edid_read_raw(struct tegra_edid *edid, int *size, u8 *data);
 
 struct tegra_dc_edid *tegra_edid_get_data(struct tegra_edid *edid);
 void tegra_edid_put_data(struct tegra_dc_edid *data);

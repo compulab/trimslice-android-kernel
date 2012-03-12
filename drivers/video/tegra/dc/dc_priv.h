@@ -46,6 +46,7 @@
 #endif
 
 struct tegra_dc;
+struct tegra_edid;
 
 struct tegra_dc_blend {
 	unsigned z[DC_N_WINDOWS];
@@ -78,6 +79,7 @@ struct tegra_dc {
 	void __iomem			*base;
 	int				irq;
 
+	int				pixel_clk;
 	struct clk			*clk;
 	struct clk			*emc_clk;
 	int				emc_clk_rate;
@@ -134,12 +136,12 @@ struct tegra_dc {
 
 	struct tegra_dc_ext		*ext;
 
+	struct tegra_edid		*edid;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry			*debugdir;
 #endif
 	struct tegra_dc_lut		fb_lut;
-	struct delayed_work		underflow_work;
-	struct work_struct		one_shot_work;
+	u32                             predefined_pll_rate;
 };
 
 static inline void tegra_dc_io_start(struct tegra_dc *dc)
@@ -195,6 +197,7 @@ static inline unsigned long tegra_dc_get_default_emc_clk_rate(
 }
 
 void tegra_dc_setup_clk(struct tegra_dc *dc, struct clk *clk);
+int tegra_dc_check_pll_rate(const struct tegra_dc *dc, struct tegra_dc_mode *mode);
 
 extern struct tegra_dc_out_ops tegra_dc_rgb_ops;
 extern struct tegra_dc_out_ops tegra_dc_hdmi_ops;
@@ -216,9 +219,5 @@ unsigned long tegra_dc_get_bandwidth(struct tegra_dc_win *wins[], int n);
 u32 tegra_dc_read_checksum_latched(struct tegra_dc *dc);
 void tegra_dc_enable_crc(struct tegra_dc *dc);
 void tegra_dc_disable_crc(struct tegra_dc *dc);
-
-void tegra_dc_set_out_pin_polars(struct tegra_dc *dc,
-				const struct tegra_dc_out_pin *pins,
-				const unsigned int n_pins);
 #endif
 
