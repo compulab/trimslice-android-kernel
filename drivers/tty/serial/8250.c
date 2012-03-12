@@ -1635,7 +1635,7 @@ static irqreturn_t serial8250_interrupt(int irq, void *dev_id)
 {
 	struct irq_info *i = dev_id;
 	struct list_head *l, *end = NULL;
-	int pass_counter = 0, handled = 0;
+	int pass_counter = 0, handled = 1;
 
 	DEBUG_INTR("serial8250_interrupt(%d)...", irq);
 

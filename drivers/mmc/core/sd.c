@@ -1164,14 +1164,15 @@ int mmc_attach_sd(struct mmc_host *host)
 	}
 
 	if (!retries) {
-		printk(KERN_ERR "%s: mmc_sd_init_card() failure (err = %d)\n",
-		       mmc_hostname(host), err);
+		printk(KERN_ERR "%s: mmc_sd_init_card() failure (err = %d)\n", mmc_hostname(host), err);
 		goto err;
 	}
 #else
 	err = mmc_sd_init_card(host, host->ocr, NULL);
-	if (err)
+	if (err) {
+        printk(KERN_ERR "%s: mmc_sd_init_card() failure (err = %d)\n", mmc_hostname(host), err);
 		goto err;
+    }
 #endif
 
 	mmc_release_host(host);
