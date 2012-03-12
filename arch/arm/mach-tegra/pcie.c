@@ -601,7 +601,7 @@ static struct pci_bus *tegra_pcie_scan_bus(int nr,
 	return pci_scan_bus(sys->busnr, &tegra_pcie_ops, sys);
 }
 
-static struct hw_pci tegra_pcie_hw = {
+static struct hw_pci tegra_pcie_hw __initdata = {
 	.nr_controllers	= MAX_PCIE_SUPPORTED_PORTS,
 	.setup		= tegra_pcie_setup,
 	.scan		= tegra_pcie_scan_bus,
@@ -734,10 +734,8 @@ static void tegra_pcie_enable_controller(void)
 	writel(reg, reg_mselect_base);
 
 	/* Enable slot clock and pulse the reset signals */
-	for (i = 0, reg = AFI_PEX0_CTRL; i < MAX_PCIE_SUPPORTED_PORTS;
-			i++, reg += (i*8)) {
-		val = afi_readl(reg) | AFI_PEX_CTRL_REFCLK_EN |
-			(1 << AFI_PEX0_CTRL_0_PEX0_CLKREQ_EN);
+	for (i = 0, reg = AFI_PEX0_CTRL; i < MAX_PCIE_SUPPORTED_PORTS; i++, reg += (i*8)) {
+		val = afi_readl(reg) | AFI_PEX_CTRL_REFCLK_EN |	(1 << AFI_PEX0_CTRL_0_PEX0_CLKREQ_EN);
 		afi_writel(val, reg);
 		val &= ~AFI_PEX_CTRL_RST;
 		afi_writel(val, reg);

@@ -37,7 +37,7 @@
 #include "clock.h"
 #include "dvfs.h"
 
-#define DISABLE_BOOT_CLOCKS 1
+#define DISABLE_BOOT_CLOCKS 0
 
 /*
  * Locking:
@@ -388,8 +388,7 @@ int clk_set_parent_locked(struct clk *c, struct clk *parent)
 	if (ret)
 		goto out;
 
-	if (clk_is_auto_dvfs(c) && c->refcnt > 0 &&
-			new_rate < old_rate)
+	if (clk_is_auto_dvfs(c) && c->refcnt > 0 &&	new_rate < old_rate)
 		ret = tegra_dvfs_set_rate(c, new_rate);
 
 	if (new_rate != old_rate)
@@ -589,8 +588,7 @@ static int tegra_clk_init_one_from_table(struct tegra_clk_init_table *table)
 	c = tegra_get_clock_by_name(table->name);
 
 	if (!c) {
-		pr_warning("Unable to initialize clock %s\n",
-			table->name);
+		pr_warning("Unable to initialize clock %s\n", table->name);
 		return -ENODEV;
 	}
 

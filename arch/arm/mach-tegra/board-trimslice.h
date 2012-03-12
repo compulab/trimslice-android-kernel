@@ -21,5 +21,6 @@
 #define TRIMSLICE_GPIO_SD4_WP	TEGRA_GPIO_PP2	/* mmc4 wp */
 
 void trimslice_pinmux_init(void);
+int trimslice_panel_init(void);
 
 #endif

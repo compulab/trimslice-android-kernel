@@ -118,6 +118,7 @@ obj-${CONFIG_MACH_SEABOARD}             += board-seaboard-pinmux.o
 
 obj-${CONFIG_MACH_TRIMSLICE}            += board-trimslice.o
 obj-${CONFIG_MACH_TRIMSLICE}            += board-trimslice-pinmux.o
+obj-${CONFIG_MACH_TRIMSLICE}            += board-trimslice-panel.o
 
 obj-${CONFIG_MACH_P852}                 += p852/
 

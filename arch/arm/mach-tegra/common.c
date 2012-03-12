@@ -153,22 +153,30 @@ static __initdata struct tegra_clk_init_table common_clk_init_table[] = {
 	{ "clk_m",	NULL,		0,		true },
 #ifdef CONFIG_TEGRA_SILICON_PLATFORM
 #ifdef CONFIG_ARCH_TEGRA_2x_SOC
-	{ "pll_p",	NULL,		216000000,	true },
+	{ "pll_p",	"clk_m",	216000000,	true },
 	{ "pll_p_out1",	"pll_p",	28800000,	true },
-	{ "pll_p_out2",	"pll_p",	48000000,	false },
+	{ "pll_p_out2",	"pll_p",	48000000,	true },
 	{ "pll_p_out3",	"pll_p",	72000000,	true },
-	{ "pll_p_out4",	"pll_p",	108000000,	false },
+	{ "pll_p_out4",	"pll_p",	108000000,	true },
 	{ "pll_m",	"clk_m",	0,		true },
 	{ "pll_m_out1",	"pll_m",	120000000,	true },
+#ifdef CONFIG_MACH_TRIMSLICE
+	{ "sclk",	"pll_m_out1",	120000000,	true },
+	{ "hclk",	"sclk",		120000000,	true },
+	{ "pclk",	"hclk",		60000000,	true },
+	{ "pll_x",	NULL,		0,		true },
+	{ "rtc",	NULL,		0,		true },
+#else
 	{ "sclk",	"pll_c_out1",	40000000,	true },
 	{ "hclk",	"sclk",		40000000,	true },
-	{ "pclk",	"hclk",		40000000,	true },
+	{ "pclk",	"hclk",		40000000,	true },	
 	{ "mpe",	"pll_c",	0,		false },
 	{ "epp",	"pll_c",	0,		false },
 	{ "vi_sensor",	"pll_c",	0,		false },
 	{ "vi",		"pll_c",	0,		false },
 	{ "2d",		"pll_c",	0,		false },
-	{ "3d",		"pll_c",	0,		false },
+        { "3d",		"pll_c",	0,		false },
+#endif
 #else
 	{ "pll_p",	NULL,		0,		true },
 	{ "pll_p_out1",	"pll_p",	0,		false },
@@ -183,19 +191,21 @@ static __initdata struct tegra_clk_init_table common_clk_init_table[] = {
 	{ "sbc5.sclk",	NULL,		40000000,	false},
 	{ "sbc6.sclk",	NULL,		40000000,	false},
 #endif
+#ifndef CONFIG_MACH_TRIMSLICE
 	{ "sbc1.sclk",	NULL,		40000000,	false},
 	{ "sbc2.sclk",	NULL,		40000000,	false},
 	{ "sbc3.sclk",	NULL,		40000000,	false},
 	{ "sbc4.sclk",	NULL,		40000000,	false},
+#endif
 #else
 	{ "pll_p",	NULL,		216000000,	true },
-	{ "pll_p_out1",	"pll_p",	28800000,	false },
-	{ "pll_p_out2",	"pll_p",	48000000,	false },
+	{ "pll_p_out1",	"pll_p",	28800000,	true },
+	{ "pll_p_out2",	"pll_p",	48000000,	true },
 	{ "pll_p_out3",	"pll_p",	72000000,	true },
 	{ "pll_m_out1",	"pll_m",	275000000,	true },
 	{ "pll_c",	NULL,		ULONG_MAX,	false },
 	{ "pll_c_out1",	"pll_c",	208000000,	false },
-	{ "pll_p_out4",	"pll_p",	108000000,	false },
+	{ "pll_p_out4",	"pll_p",	108000000,	true },
 	{ "sclk",	"pll_p_out4",	108000000,	true },
 	{ "hclk",	"sclk",		108000000,	true },
 	{ "pclk",	"hclk",		54000000,	true },
@@ -203,7 +213,7 @@ static __initdata struct tegra_clk_init_table common_clk_init_table[] = {
 #ifdef CONFIG_TEGRA_SLOW_CSITE
 	{ "csite",	"clk_m",	1000000, 	true },
 #else
-	{ "csite",      NULL,           0,              true },
+	{ "csite",	NULL,		0,		true },
 #endif
 	{ "emc",	NULL,		0,		true },
 	{ "cpu",	NULL,		0,		true },
@@ -444,7 +454,7 @@ void __init tegra_init_early(void)
 	tegra_init_clock();
 	tegra_init_pinmux();
 	tegra_clk_init_from_table(common_clk_init_table);
-	tegra_init_power();
+	// tegra_init_power();
 	tegra_init_cache(true);
 	tegra_init_ahb_gizmo_settings();
 }
@@ -504,7 +514,6 @@ static int __init tegra_vpr_arg(char *options)
 		tegra_vpr_start = memparse(p+1, &p);
 	pr_info("Found vpr, start=0x%lx size=%lx",
 		tegra_vpr_start, tegra_vpr_size);
-	return 0;
 }
 early_param("vpr", tegra_vpr_arg);
 
