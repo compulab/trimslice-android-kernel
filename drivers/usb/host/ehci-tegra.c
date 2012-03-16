@@ -106,15 +106,13 @@ static irqreturn_t tegra_ehci_irq (struct usb_hcd *hcd)
 	irqreturn_t irq_status;
 	bool pmc_remote_wakeup = false;
 
-#ifndef CONFIG_ARCH_TEGRA_2x_SOC
 	/* Fence read for coherency of AHB master intiated writes */
 	if (tegra->phy->instance == 0)
-		readl(IO_ADDRESS(IO_PPCS_PHYS + USB1_PREFETCH_ID));
+		readb(IO_ADDRESS(IO_PPCS_PHYS + USB1_PREFETCH_ID));
 	else if (tegra->phy->instance == 1)
-		readl(IO_ADDRESS(IO_PPCS_PHYS + USB2_PREFETCH_ID));
+		readb(IO_ADDRESS(IO_PPCS_PHYS + USB2_PREFETCH_ID));
 	else if (tegra->phy->instance == 2)
-		readl(IO_ADDRESS(IO_PPCS_PHYS + USB3_PREFETCH_ID));
-#endif
+		readb(IO_ADDRESS(IO_PPCS_PHYS + USB3_PREFETCH_ID));
 
 	if ((tegra->phy->usb_phy_type == TEGRA_USB_PHY_TYPE_UTMIP) &&
 		(tegra->ehci->has_hostpc)) {

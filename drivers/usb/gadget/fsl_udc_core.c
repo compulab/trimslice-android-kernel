@@ -2158,9 +2158,9 @@ static irqreturn_t fsl_udc_irq(int irq, void *_udc)
 		return IRQ_NONE;
 	}
 
-#ifndef CONFIG_ARCH_TEGRA_2x_SOC
+#ifdef CONFIG_ARCH_TEGRA
 	/* Fence read for coherency of AHB master intiated writes */
-	readl(IO_ADDRESS(IO_PPCS_PHYS + USB1_PREFETCH_ID));
+	readb(IO_ADDRESS(IO_PPCS_PHYS + USB1_PREFETCH_ID));
 #endif
 #ifndef CONFIG_TEGRA_SILICON_PLATFORM
 	{
