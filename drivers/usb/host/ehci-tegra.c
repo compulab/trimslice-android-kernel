@@ -53,8 +53,8 @@
 #define HOSTPC1_DEVLC_PTS(x)		(((x) & 0x7) << 29)
 
 #define USB1_PREFETCH_ID               6
-#define USB2_PREFETCH_ID               17
-#define USB3_PREFETCH_ID               18
+#define USB2_PREFETCH_ID               18
+#define USB3_PREFETCH_ID               17
 
 struct tegra_ehci_hcd {
 	struct ehci_hcd *ehci;
