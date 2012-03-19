@@ -565,6 +565,8 @@ static void nct1008_power_control(struct nct1008_data *data, bool is_enable)
 	else
 		dev_info(&data->client->dev, "success in %s rail vdd_nct1008\n",
 			(is_enable) ? "enabling" : "disabling");
+	/* give some delay else sometimes see failure in i2c communication */
+	udelay(300);
 }
 
 static int __devinit nct1008_configure_sensor(struct nct1008_data* data)
