@@ -1404,26 +1404,29 @@ static struct clk_ops tegra_audio_sync_clk_ops = {
 	.set_parent = tegra2_audio_sync_clk_set_parent,
 };
 
-/* call this function after pinmux configuration */
-static void tegra2_cdev_clk_set_parent(struct clk *c)
+static int tegra2_cdev_clk_set_parent(struct clk *c, struct clk *p)
 {
-	const struct clk_mux_sel *mux = 0;
+	enum tegra_pingroup pg;
 	const struct clk_mux_sel *sel;
-	enum tegra_pingroup pg = TEGRA_PINGROUP_CDEV1;
-	int val;
 
-	/* Get pinmux setting for cdev1 and cdev2 from APB_MISC register */
-	if (!strcmp(c->name, "cdev2"))
+	if (c->u.periph.clk_num == 94)
+		pg = TEGRA_PINGROUP_CDEV1;
+	else
 		pg = TEGRA_PINGROUP_CDEV2;
 
-	val = tegra_pinmux_get_func(pg);
 	for (sel = c->inputs; sel->input != NULL; sel++) {
-		if (val == sel->value)
-			mux = sel;
-	}
-	BUG_ON(!mux);
+		if (sel->input == p) {
+			if (c->refcnt)
+				clk_enable(p);
 
-	c->parent = mux->input;
+			if (c->refcnt && c->parent)
+				clk_disable(c->parent);
+
+			clk_reparent(c, p);
+			return 0;
+		}
+	}
+	return -EINVAL;
 }
 
 /* cdev1 and cdev2 (dap_mclk1 and dap_mclk2) ops */
@@ -1451,11 +1454,13 @@ static int tegra2_cdev_clk_enable(struct clk *c)
 {
 	BUG_ON(!c->u.periph.clk_num);
 
+#if 0
 	if (!c->parent) {
 		/* Set parent from inputs */
 		tegra2_cdev_clk_set_parent(c);
 		clk_enable(c->parent);
 	}
+#endif
 
 	clk_writel(PERIPH_CLK_TO_ENB_BIT(c),
 		CLK_OUT_ENB_SET + PERIPH_CLK_TO_ENB_SET_REG(c));
@@ -1474,6 +1479,7 @@ static struct clk_ops tegra_cdev_clk_ops = {
 	.init			= &tegra2_cdev_clk_init,
 	.enable			= &tegra2_cdev_clk_enable,
 	.disable		= &tegra2_cdev_clk_disable,
+	.set_parent    	= &tegra2_cdev_clk_set_parent,
 };
 
 /* shared bus ops */
