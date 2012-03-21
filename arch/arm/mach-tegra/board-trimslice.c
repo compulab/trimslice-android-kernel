@@ -357,7 +357,7 @@ static void __init tegra_trimslice_init(void)
 
 	trimslice_i2c_init();
 	trimslice_usb_init();
-	// trimslice_panel_init();
+	trimslice_panel_init();
 	trimslice_keys_init();
 }
 

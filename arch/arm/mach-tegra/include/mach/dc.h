@@ -488,6 +488,7 @@ struct tegra_dc_platform_data {
 	unsigned long		emc_clk_rate;
 	struct tegra_dc_out	*default_out;
 	struct tegra_fb_data	*fb;
+	int                     default_mode;
 };
 
 #define TEGRA_DC_FLAG_ENABLED		(1 << 0)
@@ -556,7 +557,4 @@ struct tegra_dc_edid {
 	size_t		len;
 	u8		buf[0];
 };
-struct tegra_dc_edid *tegra_dc_get_edid(struct tegra_dc *dc);
-void tegra_dc_put_edid(struct tegra_dc_edid *edid);
-
 #endif

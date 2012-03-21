@@ -95,6 +95,7 @@ struct nvhost_device {
 	void (*init)(struct nvhost_device *dev);
 	/* Device is de-initialized. */
 	void (*deinit)(struct nvhost_device *dev);
+	struct nvhost_device *dev_neighbour;
 };
 
 /* Register device to nvhost bus */

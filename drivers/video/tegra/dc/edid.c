@@ -43,10 +43,25 @@ struct tegra_edid {
 	struct tegra_edid_pvt	*data;
 
 	struct mutex		lock;
+	int filter;
+	int status;
 };
 
+struct established_timing_bitmap {
+	unsigned int xres;
+	unsigned int yres;
+	unsigned int refresh;
+	unsigned int byte;
+	unsigned int bit;
+};
+
+static struct established_timing_bitmap* tegra_edid_etb_find(struct fb_videomode *mode);
+
+#define EDID_ETB_OFFSET 35
+#define EDID_STI_OFFSET 38
+
 #if defined(DEBUG) || defined(CONFIG_DEBUG_FS)
-static int tegra_edid_show(struct seq_file *s, void *unused)
+static int tegra_edid_show(struct seq_file *s, void *unused, int type)
 {
 	struct tegra_edid *edid = s->private;
 	struct tegra_dc_edid *data;
@@ -58,34 +73,144 @@ static int tegra_edid_show(struct seq_file *s, void *unused)
 		seq_printf(s, "No EDID\n");
 		return 0;
 	}
-
 	buf = data->buf;
+	switch (type) {
+	case 0: /* ASCII Dump */
+		for (i = 0; i < data->len; i++) {
+			if (i % 16 == 0)
+				seq_printf(s, "edid[%03x] =", i);
 
-	for (i = 0; i < data->len; i++) {
-		if (i % 16 == 0)
-			seq_printf(s, "edid[%03x] =", i);
+			seq_printf(s, " %02x", buf[i]);
 
-		seq_printf(s, " %02x", buf[i]);
-
-		if (i % 16 == 15)
-			seq_printf(s, "\n");
+			if (i % 16 == 15)
+				seq_printf(s, "\n");
+		}
+		break;
+	case 1: /* Hex Dump */
+		seq_write(s ,data->buf, data->len);
+		break;
+	default:
+		break;
 	}
-
 	tegra_edid_put_data(data);
 
+	return 0;
+}
+
+static int tegra_edid_show_ascii(struct seq_file *s, void *unused){
+	return tegra_edid_show(s,unused,0);
+}
+
+static int tegra_edid_show_hex(struct seq_file *s, void *unused){
+	return tegra_edid_show(s,unused,1);
+}
+
+static int tegra_edid_show_filter(struct seq_file *s, void *unused){
+	struct tegra_edid *edid = s->private;
+	seq_printf(s,"%x\n",edid->filter);
+	return 0;
+}
+
+static int tegra_edid_show_status(struct seq_file *s, void *unused){
+	struct tegra_edid *edid = s->private;
+	seq_printf(s,"%x\n",edid->status);
 	return 0;
 }
 #endif
 
 #ifdef CONFIG_DEBUG_FS
-static int tegra_edid_debug_open(struct inode *inode, struct file *file)
+static int tegra_edid_debug_open_ascii(struct inode *inode, struct file *file)
 {
-	return single_open(file, tegra_edid_show, inode->i_private);
+	return single_open(file, tegra_edid_show_ascii, inode->i_private);
 }
 
-static const struct file_operations tegra_edid_debug_fops = {
-	.open		= tegra_edid_debug_open,
+static int tegra_edid_debug_open_hex(struct inode *inode, struct file *file)
+{
+	return single_open(file, tegra_edid_show_hex, inode->i_private);
+}
+
+static int tegra_edid_debug_open_filter(struct inode *inode, struct file *file)
+{
+	return single_open(file, tegra_edid_show_filter, inode->i_private);
+}
+
+static int tegra_edid_debug_open_status(struct inode *inode, struct file *file)
+{
+	return single_open(file, tegra_edid_show_status, inode->i_private);
+}
+
+static int tegra_edid_write(struct file *file, const char __user *u, size_t s, loff_t *o){
+	struct tegra_edid *edid = ((struct seq_file *)file->private_data)->private;
+
+	unsigned char *buffer = kmalloc(s, GFP_KERNEL);
+	size_t len = 0;
+	struct tegra_dc_edid *data;
+
+	if (buffer==NULL) { /* An allocation error, give up, nothing to do */
+		goto done;
+	}
+	memcpy(buffer,u,s);
+
+	data = tegra_edid_get_data(edid);
+	if (!data)
+		goto done;
+
+	len = ((data->len - *o) < s) ? (data->len - *o) : s;
+	memcpy((data->buf + *o),buffer,len);
+	tegra_edid_put_data(data);
+
+done:
+	if (buffer)
+		kfree(buffer);
+	*o += len;
+	return len;
+}
+
+static int tegra_edid_write_filter(struct file *file, const char __user *u, size_t s, loff_t *o){
+	struct tegra_edid *edid = ((struct seq_file *)file->private_data)->private;
+	char **last = NULL;
+
+	edid->filter = simple_strtoul(u, last, 0);
+	*o += s;
+	return s;
+}
+
+static int tegra_edid_write_status(struct file *file, const char __user *u, size_t s, loff_t *o){
+	struct tegra_edid *edid = ((struct seq_file *)file->private_data)->private;
+	char **last = NULL;
+
+	edid->status = simple_strtoul(u, last, 0);
+	*o += s;
+	return s;
+}
+
+static const struct file_operations tegra_edid_debug_fops_ascii = {
+	.open		= tegra_edid_debug_open_ascii,
 	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+static const struct file_operations tegra_edid_debug_fops_hex = {
+	.open		= tegra_edid_debug_open_hex,
+	.read		= seq_read,
+	.write		= tegra_edid_write,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+static const struct file_operations tegra_edid_debug_fops_filter = {
+	.open		= tegra_edid_debug_open_filter,
+	.read		= seq_read,
+	.write		= tegra_edid_write_filter,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+static const struct file_operations tegra_edid_debug_fops_status = {
+	.open		= tegra_edid_debug_open_status,
+	.read		= seq_read,
+	.write		= tegra_edid_write_status,
 	.llseek		= seq_lseek,
 	.release	= single_release,
 };
@@ -95,8 +220,34 @@ void tegra_edid_debug_add(struct tegra_edid *edid)
 	char name[] = "edidX";
 
 	snprintf(name, sizeof(name), "edid%1d", edid->bus);
-	debugfs_create_file(name, S_IRUGO, NULL, edid, &tegra_edid_debug_fops);
+	debugfs_create_file(name, S_IRUGO, NULL, edid, &tegra_edid_debug_fops_ascii);
+
 }
+
+void tegra_edid_debug_add_hex(struct tegra_edid *edid)
+{
+	char name[] = "edidX.hex";
+
+	snprintf(name, sizeof(name), "edid%1d.hex", edid->bus);
+	debugfs_create_file(name, (S_IRUGO|S_IWUSR), NULL, edid, &tegra_edid_debug_fops_hex);
+}
+
+void tegra_edid_debug_add_filter(struct tegra_edid *edid)
+{
+	char name[] = "edidX.filter";
+
+	snprintf(name, sizeof(name), "edid%1d.filter", edid->bus);
+	debugfs_create_file(name, (S_IRUGO|S_IWUSR), NULL, edid, &tegra_edid_debug_fops_filter);
+}
+
+void tegra_edid_debug_add_status(struct tegra_edid *edid)
+{
+	char name[] = "edidX.status";
+
+	snprintf(name, sizeof(name), "edid%1d.status", edid->bus);
+	debugfs_create_file(name, (S_IRUGO|S_IWUSR), NULL, edid, &tegra_edid_debug_fops_status);
+}
+
 #else
 void tegra_edid_debug_add(struct tegra_edid *edid)
 {
@@ -118,7 +269,7 @@ static void tegra_edid_dump(struct tegra_edid *edid)
 	s.size = sizeof(tegra_edid_dump_buff);
 	s.private = edid;
 
-	tegra_edid_show(&s, NULL);
+	tegra_edid_show(&s, NULL, 0);
 
 	i = 0;
 	while (i < s.count ) {
@@ -548,7 +699,13 @@ struct tegra_edid *tegra_edid_create(int bus)
 		goto free_edid;
 	}
 
+	/* Use filter */
+	edid->filter = 1;
+
 	tegra_edid_debug_add(edid);
+	tegra_edid_debug_add_hex(edid);
+	tegra_edid_debug_add_filter(edid);
+	tegra_edid_debug_add_status(edid);
 
 	return edid;
 
@@ -591,6 +748,178 @@ void tegra_edid_put_data(struct tegra_dc_edid *data)
 	kref_put(&pvt->refcnt, data_release);
 }
 
+static int edid_dti=1;
+static int __init tegra_edid_dti_setup(char *options)
+{
+	/*
+	Default value is 0
+	0 -- Do nothing, edid[54-71] is untouched
+	1 -- Clean Up descriptor blocks edid[54-71]=0
+	*/
+	char **last = NULL;
+	edid_dti = simple_strtoul(options, last, 0);
+	return 0;
+}
+__setup("edid_dti=", tegra_edid_dti_setup);
+
+static int edid_sti=1;
+static int __init tegra_edid_sti_setup(char *options)
+{
+	/*
+	Default value is 1
+	0 -- Do nothing, edid[38-53] is untouched
+	1 -- Clean Up Standard timing information 
+	*/
+	char **last = NULL;
+	edid_sti = simple_strtoul(options, last, 0);
+	return 0;
+}
+__setup("edid_sti=", tegra_edid_sti_setup);
+
+static int edid_dti_off=18;
+static int __init tegra_edid_dti_off_setup(char *options)
+{
+	/* 
+	Default value is 18, 
+	clean up the entire dti array except for the 1-st detailed timing descriptor.
+	*/ 
+	char **last = NULL;
+	int _edid_dti_off = simple_strtoul(options, last, 0);
+	edid_dti_off = (_edid_dti_off < 72) ? _edid_dti_off : edid_dti_off;
+	return 0;
+}
+__setup("edid_dti_off=", tegra_edid_dti_off_setup);
+
+static int edid_ext=0;
+static int __init tegra_edid_ext_setup(char *options)
+{
+	/* 
+	Default value is 0 
+	0 -- Do nothing, edid[126] is untouched
+	1 -- Clean Up extensions edid[126]=0
+	*/ 
+	char **last = NULL;
+	edid_ext = simple_strtoul(options, last, 0);
+	return 0;
+}
+__setup("edid_ext=", tegra_edid_ext_setup);
+
+void tegra_edid_modes_init(struct tegra_dc_edid *data)
+{
+	/* Clean Up modes bitmap */
+	data->buf[35] = 0x0;
+	data->buf[36] = 0x0;
+	data->buf[37] = 0x0;
+	/* Clean Up standard timing information */
+	if (edid_sti)
+		memset(&data->buf[38],1,16);
+	/* Clean Up Detailed timing descriptors' blocks */
+	/* Preferred timing mode specified in descriptor block 1 */
+	if (edid_dti)
+		memset(&data->buf[54+edid_dti_off],0,72-edid_dti_off);
+	/* Clean Up extensions */
+	if (edid_ext)
+		data->buf[126] = 0;
+}
+EXPORT_SYMBOL(tegra_edid_modes_init);
+
+static int tegra_edid_mode_to_sti(struct fb_videomode *mode, unsigned char *sti) {
+	/* X:Y pixel ratio: 00=16:10; 01=4:3; 10=5:4; 11=16:9 */
+	struct ratio {
+		int x;
+		int y;
+		unsigned char ratio_mask;
+	} a_ratio[] = {{16,10,0x0}, {4,3,0x40}, {5,4,0x80}, {16,9,0xC0}};
+	int i, len = sizeof(a_ratio);
+	for ( i = 0 ; i < len ; i++ ) {
+		if ((mode->xres / a_ratio[i].x - mode->yres / a_ratio[i].y) == 0) {
+			sti[0] = (mode->xres >> 3) - 31;
+			sti[1] = (mode->refresh > 60)  ? (mode->refresh - 60) : 0;
+			sti[1] |= a_ratio[i].ratio_mask;
+			return 0;
+		}
+	}
+	return 1;
+}
+
+static unsigned char* tegra_edid_sti_find(struct tegra_dc_edid *data , unsigned char *sti) {
+	int i=0;
+	unsigned char *buf = &data->buf[EDID_STI_OFFSET];
+	for (i = 0 ; i < 8 ; i++ ) {
+		if ((buf[i*2] == sti[0]) && (buf[(i*2)+1] == sti[1]))
+			return &buf[i*2];
+	}
+	return NULL;
+}
+
+void tegra_edid_mode_add(struct tegra_dc_edid *data, struct fb_videomode *mode) {
+	unsigned char sti[2] = { 1 , 1 };
+	unsigned char empty_sti[2] = { 1 , 1 };
+	unsigned char *sti_position = NULL;
+	struct established_timing_bitmap* etb = tegra_edid_etb_find(mode);
+
+	if (etb) {
+		data->buf[etb->byte] |= (1 << etb->bit);
+		return;
+	}
+
+	if (tegra_edid_mode_to_sti(mode,sti))
+		return;
+
+	if (tegra_edid_sti_find(data,sti))
+		return;
+
+	sti_position = tegra_edid_sti_find(data,empty_sti);
+
+	if (sti_position) {
+		sti_position[0] = sti[0];
+		sti_position[1] = sti[1];
+	}
+}
+EXPORT_SYMBOL(tegra_edid_mode_add);
+
+void tegra_edid_mode_rem(struct tegra_dc_edid *data, struct fb_videomode *mode) {
+	unsigned char sti[2] = { 1 , 1 };
+	unsigned char *sti_position = NULL;
+	struct established_timing_bitmap* etb = tegra_edid_etb_find(mode);
+
+	if (etb) {
+		data->buf[etb->byte] &= ~(1 << etb->bit);
+		return;
+	}
+
+	if (tegra_edid_mode_to_sti(mode,sti))
+		return;
+
+	sti_position = tegra_edid_sti_find(data,sti);
+
+	if (sti_position) {
+		sti_position[0] = 1;
+		sti_position[1] = 1;
+	}
+}
+EXPORT_SYMBOL(tegra_edid_mode_rem);
+
+int tegra_edid_get_filter(struct tegra_edid *edid) {
+	return edid->filter;
+}
+EXPORT_SYMBOL(tegra_edid_get_filter);
+
+void tegra_edid_set_filter(struct tegra_edid *edid, int value) {
+	edid->filter = value;
+}
+EXPORT_SYMBOL(tegra_edid_set_filter);
+
+int tegra_edid_get_status(struct tegra_edid *edid) {
+	return edid->status;
+}
+EXPORT_SYMBOL(tegra_edid_get_status);
+
+void tegra_edid_set_status(struct tegra_edid *edid, int value) {
+	edid->status = value;
+}
+EXPORT_SYMBOL(tegra_edid_set_status);
+
 static const struct i2c_device_id tegra_edid_id[] = {
         { "tegra_edid", 0 },
         { }
@@ -617,3 +946,32 @@ static void __exit tegra_edid_exit(void)
 
 module_init(tegra_edid_init);
 module_exit(tegra_edid_exit);
+
+static struct established_timing_bitmap* tegra_edid_etb_find(struct fb_videomode *mode) {
+	static struct established_timing_bitmap etb_array[] = {
+		{ 720,400,70,35,7 },
+		{ 720,400,88,35,6 },
+		{ 640,480,60,35,5 },
+		{ 640,480,67,35,4 },
+		{ 640,480,72,35,3 },
+		{ 640,480,75,35,2 },
+		{ 800,600,56,35,1 },
+		{ 800,600,60,35,0 },
+		{ 800,600,72,36,7 },
+		{ 800,600,75,36,6 },
+		{ 832,624,75,36,5 },
+		{ 1024,768,87,36,4 },
+		{ 1024,768,60,36,3 },
+		{ 1024,768,72,36,2 },
+		{ 1024,768,75,36,1 },
+		{ 1280,1024,75,36,0 },
+	};
+	int etb_len=sizeof(etb_array);
+	int i=0;
+	for (i = 0 ; i < etb_len ; i++ ) {
+		struct established_timing_bitmap *etb = &etb_array[i];
+		if ((mode->xres == etb->xres) && (mode->yres == etb->yres) && (mode->refresh == etb->refresh))
+			return etb;
+	}
+	return NULL;
+}

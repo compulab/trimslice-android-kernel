@@ -141,6 +141,10 @@ struct tegra_dc {
 	struct delayed_work		underflow_work;
 	u32				one_shot_delay_ms;
 	struct delayed_work		one_shot_work;
+	u32	predefined_pll_rate;
+	bool (*mode_filter)(const struct tegra_dc *dc, struct fb_videomode *mode);
+	struct tegra_dc_edid* (*get_edid)(struct tegra_dc *dc);
+	void (*put_edid) (struct tegra_dc_edid *edid);
 };
 
 static inline void tegra_dc_io_start(struct tegra_dc *dc)
@@ -221,5 +225,9 @@ void tegra_dc_disable_crc(struct tegra_dc *dc);
 void tegra_dc_set_out_pin_polars(struct tegra_dc *dc,
 				const struct tegra_dc_out_pin *pins,
 				const unsigned int n_pins);
+
+int tegra_dc_check_pll_rate(const struct tegra_dc *dc, struct tegra_dc_mode *mode);
+bool tegra_dc_mode_filter(const struct tegra_dc *dc, struct fb_videomode *mode);
+
 #endif
 

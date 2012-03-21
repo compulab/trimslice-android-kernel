@@ -422,6 +422,96 @@ static struct fb_ops tegra_fb_ops = {
 	.fb_ioctl = tegra_fb_ioctl,
 };
 
+const struct fb_videomode *fb_find_best_supported_mode(const struct fb_monspecs *specs,
+					        struct list_head *head)
+{
+	struct list_head *pos;
+	struct fb_modelist *modelist;
+	const struct fb_videomode *m, *m1 = NULL, *md = NULL, *best = NULL;
+        struct fb_videomode tmp_mode;
+
+	int first = 0;
+
+	if (!head->prev || !head->next || list_empty(head))
+		goto finished;
+
+	/* get the first detailed mode and the very first mode */
+	list_for_each(pos, head) {
+		modelist = list_entry(pos, struct fb_modelist, list);
+		m = &modelist->mode;
+
+		if (!first) {
+			m1 = m;
+			first = 1;
+		}
+
+		if (m->flag & FB_MODE_IS_FIRST) {
+			md = m;
+			break;
+		}
+	}
+
+	/* first detailed timing is preferred */
+	if (specs->misc & FB_MISC_1ST_DETAIL) {
+		best = md;
+		goto finished;
+	}
+
+        /* find best mode based on display aspect ratio */
+	if (specs->max_x && specs->max_y)
+	{
+		u32 display_aspect_ratio = 100 * specs->max_x / specs->max_y;
+		u32 best_aspect_ratio, best_refresh;
+
+		memset(&tmp_mode, 0, sizeof(struct fb_videomode));
+		best_aspect_ratio = 0;
+		best_refresh = 0;
+		best = &tmp_mode;
+
+		pr_info ("monitor aspect ratio = %d (%dx%d)",display_aspect_ratio,specs->max_x,specs->max_y);
+		/* Find maximum supported resolution with proper aspect ratio
+		   and maximum refresh rate */
+		list_for_each(pos, head) {
+			modelist = list_entry(pos, struct fb_modelist, list);
+			m = &modelist->mode;
+			if (m->xres > best->xres) {
+				u32 mode_aspect_ratio = 100 * m->xres / m->yres;
+				u32 mode_diff = abs (mode_aspect_ratio -
+						display_aspect_ratio);
+				u32 best_diff = abs(best_aspect_ratio -
+						display_aspect_ratio);
+
+				if (mode_diff < best_diff) {
+					best =m;
+					best_aspect_ratio = mode_aspect_ratio;
+				} else if ( mode_diff == best_diff) {
+					if (m->refresh > best_refresh) {
+						best = m;
+						best_refresh = m->refresh;
+					}else {
+						best = m;
+					}
+				}
+			}
+		}
+		goto finished;
+	}
+
+
+	/* use first detailed mode */
+	if (md) {
+		best = md;
+		goto finished;
+	}
+
+	/* last resort, use the very first mode */
+	best = m1;
+finished:
+	pr_info("best mode selected: %dx%d-%d",
+		best->xres,best->yres,best->refresh);
+	return best;
+}
+
 void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
 			      struct fb_monspecs *specs,
 			      bool (*mode_filter)(const struct tegra_dc *dc,
@@ -429,6 +519,7 @@ void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
 {
 	struct fb_event event;
 	int i;
+	bool use_first_detailed_mode = false;
 
 	mutex_lock(&fb_info->info->lock);
 	fb_destroy_modedb(fb_info->info->monspecs.modedb);
@@ -456,14 +547,41 @@ void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
 
 	for (i = 0; i < specs->modedb_len; i++) {
 		if (mode_filter) {
-			if (mode_filter(fb_info->win->dc, &specs->modedb[i]))
+			if (mode_filter(fb_info->win->dc, &specs->modedb[i])) {
 				fb_add_videomode(&specs->modedb[i],
 						 &fb_info->info->modelist);
+				if (i == 0)
+					use_first_detailed_mode = true;
+			}
 		} else {
 			fb_add_videomode(&specs->modedb[i],
 					 &fb_info->info->modelist);
 		}
 	}
+
+	if (list_empty(&fb_info->info->modelist)) {
+		struct tegra_dc_mode mode;
+		memset(&fb_info->info->var, 0x0, sizeof(fb_info->info->var));
+		memset(&mode, 0x0, sizeof(mode));
+		tegra_dc_set_mode(fb_info->win->dc, &mode);
+	} else {
+		/* in case the first mode was not matched */
+		struct fb_modelist *m;
+		m = list_first_entry(&fb_info->info->modelist, struct fb_modelist, list);
+		m->mode.flag |= FB_MODE_IS_FIRST;
+
+		if (!use_first_detailed_mode) {
+			specs->misc &= ~FB_MISC_1ST_DETAIL;
+			pr_info("warning: native resolution isn't supported.");
+		}
+
+		fb_info->info->mode = (struct fb_videomode *)
+			fb_find_best_supported_mode(specs, &fb_info->info->modelist);
+
+		fb_videomode_to_var(&fb_info->info->var, fb_info->info->mode);
+		tegra_fb_set_par(fb_info->info);
+	}
+
 
 	event.info = fb_info->info;
 	fb_notifier_call_chain(FB_EVENT_NEW_MODELIST, &event);

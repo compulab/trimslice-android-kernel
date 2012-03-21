@@ -25,6 +25,8 @@
 #include <linux/uaccess.h>
 
 #include "tegra_dc_ext_priv.h"
+#include "../dc_priv.h"
+
 
 static struct tegra_dc_ext_control g_control;
 
@@ -75,7 +77,12 @@ static int get_output_edid(struct tegra_dc_ext_control_output_edid *edid)
 
 	dc = tegra_dc_get_dc(edid->handle);
 
-	dc_edid = tegra_dc_get_edid(dc);
+	if (dc->get_edid)
+		dc_edid = dc->get_edid(dc);
+	else
+		dc_edid = ERR_PTR(-ENOSYS);
+
+
 	if (IS_ERR(dc_edid))
 		return PTR_ERR(dc_edid);
 
@@ -98,7 +105,7 @@ static int get_output_edid(struct tegra_dc_ext_control_output_edid *edid)
 
 done:
 	if (dc_edid)
-		tegra_dc_put_edid(dc_edid);
+		dc->put_edid(dc_edid);
 
 	return ret;
 }

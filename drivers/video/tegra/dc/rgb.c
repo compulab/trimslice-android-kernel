@@ -16,11 +16,17 @@
  */
 
 #include <linux/kernel.h>
-
 #include <mach/dc.h>
+ #include <mach/fb.h>
 
 #include "dc_reg.h"
 #include "dc_priv.h"
+#include "edid.h"
+
+static unsigned int LCD_MAX_HORIZONTAL_RESOLUTION=1680;
+static unsigned int LCD_MAX_VERTICAL_RESOLUTION=1050;
+
+#define LCD_MIN_REFRESH_RATE 50
 
 
 static const u32 tegra_dc_rgb_enable_partial_pintable[] = {
@@ -90,6 +96,17 @@ static const u32 tegra_dc_rgb_disable_pintable[] = {
 	DC_COM_PIN_OUTPUT_SELECT6,	0x00000000,
 };
 
+struct tegra_dc_rgb_data {
+	struct tegra_dc			*dc;
+	struct tegra_edid		*edid;
+	struct tegra_edid_hdmi_eld		eld;
+	struct tegra_nvhdcp		*nvhdcp;
+	spinlock_t			suspend_lock;
+};
+
+static int rgb_filter = 1;
+static int rgb_edid   = 0;
+
 void tegra_dc_rgb_enable(struct tegra_dc *dc)
 {
 	int i;
@@ -153,8 +170,213 @@ void tegra_dc_rgb_disable(struct tegra_dc *dc)
 	tegra_dc_write_table(dc, tegra_dc_rgb_disable_pintable);
 }
 
+static bool tegra_dc_rgb_mode_filter_extra(const struct tegra_dc *dc, struct fb_videomode *mode)
+{
+	int clocks;
+	struct tegra_dc_mode dc_mode;
+	bool mode_supported = false;
+
+	clocks = (mode->left_margin + mode->xres + mode->right_margin
+		+ mode->hsync_len) *
+		(mode->upper_margin + mode->yres + mode->lower_margin
+		+ mode->vsync_len);
+	if (clocks)
+		mode->refresh = (PICOS2KHZ(mode->pixclock) * 1000) / clocks;
+
+	if (mode->refresh < LCD_MIN_REFRESH_RATE)
+		return false;
+
+	dc_mode.pclk = PICOS2KHZ(mode->pixclock) * 1000;
+	dc_mode.h_active = mode->xres;
+	dc_mode.v_active = mode->yres;
+
+	if (tegra_dc_check_pll_rate(dc, &dc_mode) > 0)
+		mode_supported = true;
+
+	if (mode->xres > LCD_MAX_HORIZONTAL_RESOLUTION ||
+		mode->yres > LCD_MAX_VERTICAL_RESOLUTION)
+		mode_supported = false;
+
+	return mode_supported;
+}
+
+static bool tegra_dc_rgb_mode_filter(const struct tegra_dc *dc, struct fb_videomode *mode)
+{
+	bool mode_supported = false;
+	struct tegra_dc_rgb_data *rgb = (struct tegra_dc_rgb_data *) tegra_dc_get_outdata((struct tegra_dc *) dc);
+
+	mode_supported = tegra_dc_mode_filter(dc,mode);
+	if (mode_supported && tegra_edid_get_filter(rgb->edid)) {
+		/* Don't issue the function if filter is not set */
+		mode_supported = tegra_dc_rgb_mode_filter_extra(dc,mode);
+	}
+
+	pr_info("dvi: \t%dx%d-%d (pclk=%ld) -> %s\n",
+		mode->xres, mode->yres,
+		mode->refresh, (PICOS2KHZ(mode->pixclock) * 1000),
+		mode_supported ? "supported" : "rejected");
+
+	if (mode_supported && tegra_edid_get_filter(rgb->edid)) {
+		/* Edid fixer */
+		struct tegra_dc_edid *tegra_dc_edid = tegra_edid_get_data(rgb->edid);
+		tegra_edid_mode_add(tegra_dc_edid, mode);
+		tegra_edid_put_data(tegra_dc_edid);
+	}
+
+	return mode_supported;
+}
+
+void tegra_dc_create_default_monspecs(int default_mode,
+                                struct fb_monspecs *specs);
+
+static bool tegra_dc_rgb_detect(struct tegra_dc *dc)
+{
+	struct tegra_dc_rgb_data *rgb = (struct tegra_dc_rgb_data *) tegra_dc_get_outdata(dc);
+	struct fb_monspecs specs;
+	int err;
+
+	if (!rgb->edid)
+		goto fail;
+
+	err = tegra_edid_get_monspecs(rgb->edid, &specs);
+
+	if (err < 0 && !dc->pdata->default_mode) {
+		dev_err(&dc->ndev->dev, "error reading edid\n");
+		goto fail;
+	} else if (dc->pdata->default_mode) {
+
+		dev_info(&dc->ndev->dev, "ignore EDID data, using the default " \
+			"DVI resolutions");
+		tegra_dc_create_default_monspecs(dc->pdata->default_mode,
+						&specs);
+	}
+
+	/* monitors like to lie about these but they are still useful for
+	 * detecting aspect ratios
+	 */
+	dc->out->h_size = specs.max_x * 1000;
+	dc->out->v_size = specs.max_y * 1000;
+
+	/* Don't touch the edid if filter is not set */
+	if (tegra_edid_get_filter(rgb->edid)) {
+		/* Edid fixer */
+		struct tegra_dc_edid *tegra_dc_edid = tegra_edid_get_data(rgb->edid);
+		tegra_edid_modes_init(tegra_dc_edid);
+		tegra_edid_put_data(tegra_dc_edid);
+	}
+
+	tegra_fb_update_monspecs(dc->fb, &specs, dc->mode_filter);
+	dev_info(&dc->ndev->dev, "display detected\n");
+
+	dc->connected = true;
+	tegra_dc_ext_process_hotplug(dc->ndev->id);
+	return true;
+fail:
+	return false;
+}
+
+static struct tegra_dc_edid *tegra_dc_rgb_get_edid(struct tegra_dc *dc)
+{
+	struct tegra_dc_rgb_data *rgb = (struct tegra_dc_rgb_data *) tegra_dc_get_outdata((struct tegra_dc *) dc);
+	if (tegra_edid_get_status(rgb->edid)) {
+		struct tegra_dc_rgb_data *rgb;
+
+		rgb = tegra_dc_get_outdata(dc);
+
+		return tegra_edid_get_data(rgb->edid);
+	} else {
+		pr_warning("%s: no dvi edid mode\n",__FUNCTION__);
+		return NULL;
+	}
+}
+
+static void tegra_dc_rgb_put_edid(struct tegra_dc_edid *edid)
+{
+	tegra_edid_put_data(edid);
+}
+
+static int tegra_dc_rgb_init(struct tegra_dc *dc)
+{
+	struct tegra_dc_rgb_data *rgb = NULL;
+	int err;
+
+	rgb = kzalloc(sizeof(*rgb), GFP_KERNEL);
+	if (!rgb)
+		return -ENOMEM;
+
+	rgb->edid = tegra_edid_create(dc->out->dcc_bus);
+	if (IS_ERR_OR_NULL(rgb->edid)) {
+		dev_err(&dc->ndev->dev, "rgb: can't create edid\n");
+		err = PTR_ERR(rgb->edid);
+		goto err_free_mem;
+	}
+
+	tegra_edid_set_filter(rgb->edid,rgb_filter);
+	tegra_edid_set_status(rgb->edid,rgb_edid);
+
+	tegra_dc_set_outdata(dc, rgb);
+	rgb->dc = dc;
+
+	spin_lock_init(&rgb->suspend_lock);
+
+	dc->predefined_pll_rate = 0;
+	dc->get_edid = tegra_dc_rgb_get_edid;
+	dc->put_edid = tegra_dc_rgb_put_edid;
+	dc->mode_filter = tegra_dc_rgb_mode_filter;
+
+	return 0;
+err_free_mem:
+	if (rgb)
+		kfree(rgb);
+	return err;
+}
+
+static void tegra_dc_rgb_destroy(struct tegra_dc *dc)
+{
+	struct tegra_dc_rgb_data *rgb = tegra_dc_get_outdata(dc);
+	tegra_edid_destroy(rgb->edid);
+	kfree(rgb);
+}
+
 struct tegra_dc_out_ops tegra_dc_rgb_ops = {
+	.init = tegra_dc_rgb_init,
+	.destroy = tegra_dc_rgb_destroy,
 	.enable = tegra_dc_rgb_enable,
 	.disable = tegra_dc_rgb_disable,
+	.detect = tegra_dc_rgb_detect,
 };
+
+static int __init tegra_dc_rgb_filter_setup(char *options)
+{
+	rgb_filter = (strcmp(options,"no") != 0);
+	return 0;
+}
+__setup("rgb_filter=", tegra_dc_rgb_filter_setup);
+
+static int __init tegra_dc_rgb_lcd_max_h_setup(char *options)
+{
+	char **last = NULL;
+	unsigned int lcd_max_h = simple_strtoul(options, last, 0);
+	if (lcd_max_h)
+		LCD_MAX_HORIZONTAL_RESOLUTION = lcd_max_h;
+	return 0;
+}
+__setup("lcd_max_h=", tegra_dc_rgb_lcd_max_h_setup);
+
+static int __init tegra_dc_rgb_lcd_max_v_setup(char *options)
+{
+	char **last = NULL;
+	unsigned int lcd_max_v = simple_strtoul(options, last, 0);
+	if (lcd_max_v)
+		LCD_MAX_VERTICAL_RESOLUTION = lcd_max_v;
+	return 0;
+}
+__setup("lcd_max_v=", tegra_dc_rgb_lcd_max_v_setup);
+
+static int __init tegra_dc_rgb_edid_setup(char *options)
+{
+	rgb_edid = (strcmp(options,"no") != 0);
+	return 0;
+}
+__setup("rgb_edid=", tegra_dc_rgb_edid_setup);
 

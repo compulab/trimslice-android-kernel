@@ -67,6 +67,10 @@
 #define HDMI_ELD_PRODUCT_CODE_INDEX		18
 #define HDMI_ELD_MONITOR_NAME_INDEX		20
 
+#define HDMI_DC_MAX_HORIZONTAL_RESOLUTION 1920
+#define HDMI_DC_MAX_VERTICAL_RESOLUTION 1080
+#define HDMI_DC_MIN_REFRESH_RATE 50
+
 struct tegra_dc_hdmi_data {
 	struct tegra_dc			*dc;
 	struct tegra_edid		*edid;
@@ -98,7 +102,9 @@ struct tegra_dc_hdmi_data {
 	bool				dvi;
 };
 
-struct tegra_dc_hdmi_data *dc_hdmi;
+static struct tegra_dc_hdmi_data *dc_hdmi;
+static int hdmi_filter = 1;
+static int hdmi_edid   = 1;
 
 const struct fb_videomode tegra_dc_hdmi_supported_modes[] = {
 	/* 1280x720p 60hz: EIA/CEA-861-B Format 4 */
@@ -713,7 +719,31 @@ static bool tegra_dc_hdmi_valid_pixclock(const struct tegra_dc *dc,
 	}
 }
 
-static bool tegra_dc_hdmi_mode_filter(const struct tegra_dc *dc,
+static bool tegra_dc_hdmi_mode_filter_extra(const struct tegra_dc *dc,
+					struct fb_videomode *mode)
+{
+	bool mode_supported = false;
+	struct tegra_dc_mode dc_mode;
+
+	dc_mode.pclk = PICOS2KHZ(mode->pixclock) * 1000;
+	dc_mode.h_active = mode->xres;
+	dc_mode.v_active = mode->yres;
+
+	/* Let's do another sanity */
+	if (mode->refresh < HDMI_DC_MIN_REFRESH_RATE)
+		mode_supported = false;
+	else {
+		if (tegra_dc_check_pll_rate(dc, &dc_mode) > 0)
+			mode_supported = true;
+
+		if (mode->xres > HDMI_DC_MAX_HORIZONTAL_RESOLUTION ||
+			mode->yres > HDMI_DC_MAX_VERTICAL_RESOLUTION)
+			mode_supported = false;
+	}
+	return mode_supported;
+}
+
+bool tegra_dc_mode_filter(const struct tegra_dc *dc,
 					struct fb_videomode *mode)
 {
 	int i;
@@ -744,6 +774,33 @@ static bool tegra_dc_hdmi_mode_filter(const struct tegra_dc *dc,
 	return false;
 }
 
+static bool tegra_dc_hdmi_mode_filter(const struct tegra_dc *dc,
+                                        struct fb_videomode *mode)
+{
+	bool mode_supported = false;
+	struct tegra_dc_hdmi_data *hdmi = (struct tegra_dc_hdmi_data *) tegra_dc_get_outdata((struct tegra_dc *)dc);
+
+	mode_supported = tegra_dc_mode_filter(dc,mode);
+	if (mode_supported && tegra_edid_get_filter(hdmi->edid)) {
+		/* Don't issue the extra function if filter is not set */
+		mode_supported = tegra_dc_hdmi_mode_filter_extra(dc,mode);
+	}
+
+	pr_info("hdmi: \t%dx%d-%d (pclk=%ld) -> %s\n",
+		mode->xres, mode->yres,
+		mode->refresh, (PICOS2KHZ(mode->pixclock) * 1000),
+		mode_supported ? "supported" : "rejected");
+
+	if (mode_supported && tegra_edid_get_filter(hdmi->edid)) {
+		/* Edid fixer */
+		struct tegra_dc_hdmi_data *hdmi = (struct tegra_dc_hdmi_data *) tegra_dc_get_outdata((struct tegra_dc *) dc);
+		struct tegra_dc_edid *tegra_dc_edid = tegra_edid_get_data(hdmi->edid);
+		tegra_edid_mode_add(tegra_dc_edid, mode);
+		tegra_edid_put_data(tegra_dc_edid);
+	}
+
+	return mode_supported;
+}
 
 static bool tegra_dc_hdmi_hpd(struct tegra_dc *dc)
 {
@@ -772,12 +829,45 @@ void tegra_dc_hdmi_detect_config(struct tegra_dc *dc,
 
 	hdmi->dvi = !(specs->misc & FB_MISC_HDMI);
 
+	/* Don't touch the edid if filter is not set */
+	if (tegra_edid_get_filter(hdmi->edid)) {
+		/* Edid fixer */
+		struct tegra_dc_edid *tegra_dc_edid = tegra_edid_get_data(hdmi->edid);
+		tegra_edid_modes_init(tegra_dc_edid);
+		tegra_edid_put_data(tegra_dc_edid);
+	}
+
 	tegra_fb_update_monspecs(dc->fb, specs, tegra_dc_hdmi_mode_filter);
 #ifdef CONFIG_SWITCH
 	hdmi->hpd_switch.state = 0;
 	switch_set_state(&hdmi->hpd_switch, 1);
 #endif
 	dev_info(&dc->ndev->dev, "display detected\n");
+
+	/* Skip if filter is not set */
+	if (tegra_edid_get_filter(hdmi->edid)) {
+		/* Notify RGB dc of HDMI dc presence and its PLL_D selection.
+		 * We want to give priority for HDMI as it can generate 1080p resolution
+		 */
+		struct tegra_dc *rgb_dc = (struct tegra_dc *)nvhost_get_drvdata (
+			(struct nvhost_device *)dc->ndev->dev_neighbour);
+
+		if (rgb_dc != NULL) {
+			if (rgb_dc->connected) {
+				dev_info(&dc->ndev->dev, "warning: both HDMI and DVI "\
+				"displays are detected.\n Adjusting DVI resolutions to "\
+				"preserve HDMI PLL_D selection "\
+						 "(pll_d=%d, HDMI mode:%dx%d)",
+					tegra_dc_check_pll_rate(dc, &dc->mode),
+					dc->mode.h_active,
+					dc->mode.v_active);
+
+				rgb_dc->predefined_pll_rate =
+					tegra_dc_check_pll_rate(dc, &dc->mode);
+				rgb_dc->out_ops->detect(rgb_dc);
+			}
+		}
+	}
 
 	dc->connected = true;
 	tegra_dc_ext_process_hotplug(dc->ndev->id);
@@ -944,12 +1034,35 @@ static ssize_t underscan_show(struct device *dev,
 
 static DEVICE_ATTR(underscan, S_IRUGO | S_IWUSR, underscan_show, NULL);
 
+static struct tegra_dc_edid *tegra_dc_get_edid(struct tegra_dc *dc)
+{
+	struct tegra_dc_hdmi_data *hdmi = (struct tegra_dc_hdmi_data *) tegra_dc_get_outdata((struct tegra_dc *)dc);
+	if (tegra_edid_get_status(hdmi->edid)) {
+		struct tegra_dc_hdmi_data *hdmi;
+
+		/* TODO: Support EDID on non-HDMI devices */
+		if (dc->out->type != TEGRA_DC_OUT_HDMI)
+			return ERR_PTR(-ENODEV);
+
+		hdmi = tegra_dc_get_outdata(dc);
+
+		return tegra_edid_get_data(hdmi->edid);
+	} else {
+		pr_warning("%s: no hdmi edid mode\n",__FUNCTION__);
+		return NULL;
+	}
+}
+
+static void tegra_dc_put_edid(struct tegra_dc_edid *edid)
+{
+	tegra_edid_put_data(edid);
+}
+
 static int tegra_dc_hdmi_init(struct tegra_dc *dc)
 {
 	struct tegra_dc_hdmi_data *hdmi;
 	struct resource *res;
 	struct resource *base_res;
-	int ret;
 	void __iomem *base;
 	struct clk *clk = NULL;
 	struct clk *disp1_clk = NULL;
@@ -1042,6 +1155,9 @@ static int tegra_dc_hdmi_init(struct tegra_dc *dc)
 		goto err_free_irq;
 	}
 
+	tegra_edid_set_filter(hdmi->edid,hdmi_filter);
+	tegra_edid_set_status(hdmi->edid,hdmi_edid);
+
 #ifdef CONFIG_TEGRA_NVHDCP
 	hdmi->nvhdcp = tegra_nvhdcp_create(hdmi, dc->ndev->id,
 			dc->out->dcc_bus);
@@ -1092,6 +1208,11 @@ static int tegra_dc_hdmi_init(struct tegra_dc *dc)
 	}
 
 	tegra_dc_hdmi_debug_create(hdmi);
+
+	dc->predefined_pll_rate = 0;
+	dc->get_edid = tegra_dc_get_edid;
+	dc->put_edid = tegra_dc_put_edid;
+	dc->mode_filter = tegra_dc_hdmi_mode_filter;
 
 	return 0;
 
@@ -1365,10 +1486,11 @@ int tegra_hdmi_setup_audio_freq_source(unsigned audio_freq, unsigned audio_sourc
 		/* If we can program HDMI, then proceed */
 		if (hdmi->clk_enabled)
 			tegra_dc_hdmi_setup_audio(hdmi->dc, audio_freq,audio_source);
-
-		/* Store it for using it in enable */
-		hdmi->audio_freq = audio_freq;
-		hdmi->audio_source = audio_source;
+		else {
+			/* Store it for using it in enable */
+			hdmi->audio_freq = audio_freq;
+			hdmi->audio_source = audio_source;
+		}
 	}
 	else
 		return -EINVAL;
@@ -1835,22 +1957,17 @@ struct tegra_dc_out_ops tegra_dc_hdmi_ops = {
 	.resume = tegra_dc_hdmi_resume,
 };
 
-struct tegra_dc_edid *tegra_dc_get_edid(struct tegra_dc *dc)
+static int __init tegra_dc_hdmi_filter_setup(char *options)
 {
-	struct tegra_dc_hdmi_data *hdmi;
-
-	/* TODO: Support EDID on non-HDMI devices */
-	if (dc->out->type != TEGRA_DC_OUT_HDMI)
-		return ERR_PTR(-ENODEV);
-
-	hdmi = tegra_dc_get_outdata(dc);
-
-	return tegra_edid_get_data(hdmi->edid);
+	hdmi_filter = (strcmp(options,"no") != 0);
+	return 0;
 }
-EXPORT_SYMBOL(tegra_dc_get_edid);
+__setup("hdmi_filter=", tegra_dc_hdmi_filter_setup);
 
-void tegra_dc_put_edid(struct tegra_dc_edid *edid)
+static int __init tegra_dc_hdmi_edid_setup(char *options)
 {
-	tegra_edid_put_data(edid);
+	hdmi_edid = (strcmp(options,"no") != 0);
+	return 0;
 }
-EXPORT_SYMBOL(tegra_dc_put_edid);
+__setup("hdmi_edid=", tegra_dc_hdmi_edid_setup);
+

@@ -64,6 +64,11 @@
 #define ALL_UF_INT (0)
 #endif
 
+unsigned int tegra_dc_limit_plus=9;
+unsigned int tegra_dc_limit_minus=9;
+#define LIMIT_LOW  100*(100-(tegra_dc_limit_minus))
+#define LIMIT_HIGH 100*(100+(tegra_dc_limit_plus))
+
 static int no_vsync;
 
 module_param_named(no_vsync, no_vsync, int, S_IRUGO | S_IWUSR);
@@ -1369,6 +1374,63 @@ static unsigned long tegra_dc_pclk_round_rate(struct tegra_dc *dc, int pclk)
 	return rate * 2 / div;
 }
 
+unsigned long pll_d_rates[] = {
+        216000000,
+        252000000,
+        318000000,
+        460000000,
+        504000000,
+        594000000,
+        1000000000
+};
+
+int tegra_dc_check_pll_rate(const struct tegra_dc *dc, struct tegra_dc_mode *mode)
+{
+	int pclk,pclk_best=0;
+	unsigned long div;
+	unsigned long rate, rate_best=pll_d_rates[0];
+	int i;
+
+	/* sanity check for EDID data */
+	if (mode->pclk == 0)
+		return 0;
+
+	for (i=0; i < ARRAY_SIZE(pll_d_rates); i++)
+	{
+		if (dc->predefined_pll_rate > 0) {
+			rate =  dc->predefined_pll_rate;
+			i =  ARRAY_SIZE(pll_d_rates);
+		} else
+			rate = pll_d_rates[i];
+
+		div = DIV_ROUND_CLOSEST(rate * 2,mode-> pclk);
+		if (div < 2)
+			return 0;
+		pclk = rate * 2 /div;
+
+		if (pclk <= mode->pclk && pclk > pclk_best) {
+			rate_best = rate;
+			pclk_best = pclk;
+		} else if( pclk >  mode->pclk && pclk < pclk_best) {
+			rate_best = rate;
+			pclk_best = pclk;
+		}
+	}
+
+	rate = rate_best;
+	pclk = pclk_best;
+
+	div = (rate * 2 / pclk) - 2;
+
+	/* request -/+ accuracy for pixel clock */
+	if (pclk < (mode->pclk / LIMIT_LOW) ||
+	    pclk > (mode->pclk / LIMIT_HIGH)) {
+		return 0;
+	}
+	return rate;
+
+}
+
 static unsigned long tegra_dc_pclk_predict_rate(struct clk *parent, int pclk)
 {
 	unsigned long rate;
@@ -1426,12 +1488,7 @@ void tegra_dc_setup_clk(struct tegra_dc *dc, struct clk *clk)
 
 		/* needs to match tegra_dc_hdmi_supported_modes[]
 		and tegra_pll_d_freq_table[] */
-		if (dc->mode.pclk > 70000000)
-			rate = 594000000;
-		else if (dc->mode.pclk > 25200000)
-			rate = 216000000;
-		else
-			rate = 504000000;
+		rate = tegra_dc_check_pll_rate(dc, &dc->mode);
 
 		if (rate != clk_get_rate(base_clk))
 			clk_set_rate(base_clk, rate);
@@ -1684,14 +1741,15 @@ static int tegra_dc_program_mode(struct tegra_dc *dc, struct tegra_dc_mode *mode
 	rate = tegra_dc_clk_get_rate(dc);
 
 	pclk = tegra_dc_pclk_round_rate(dc, mode->pclk);
-	if (pclk < (mode->pclk / 100 * 99) ||
-	    pclk > (mode->pclk / 100 * 109)) {
-		dev_err(&dc->ndev->dev,
-			"can't divide %ld clock to %d -1/+9%% %ld %d %d\n",
-			rate, mode->pclk,
-			pclk, (mode->pclk / 100 * 99),
-			(mode->pclk / 100 * 109));
-		return -EINVAL;
+	if (pclk < (mode->pclk / LIMIT_LOW) ||
+		pclk > (mode->pclk / LIMIT_HIGH)) {
+		dev_warn(&dc->ndev->dev,
+			"can't divide %ld clock to %d -%d/+%d%% %ld %d %d\n",
+			rate, mode->pclk,tegra_dc_limit_minus,tegra_dc_limit_plus,
+			pclk, (mode->pclk / LIMIT_LOW),
+			(mode->pclk / LIMIT_HIGH));
+		/* return -EINVAL; */
+		/* Let it set the clock, some monitors can deal with it */
 	}
 
 	div = (rate * 2 / pclk) - 2;

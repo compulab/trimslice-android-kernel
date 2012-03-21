@@ -204,9 +204,8 @@ static struct platform_device *trimslice_gfx_devices[] __initdata = {
 #ifdef CONFIG_TEGRA_GRHOST
 	&tegra_grhost_device,
 #endif
-	/*
+	&tegra_pwfm0_device,
 	&tegra_pwfm2_device, 
-	*/ 
 };
 
 static int  tegra_default_dvi_mode = 0;
@@ -250,11 +249,6 @@ int __init trimslice_panel_init(void)
 	gpio_direction_input(trimslice_hdmi_hpd);
 	tegra_gpio_enable(trimslice_hdmi_hpd);
 
-	/* Disable DVI trasceiver by default */
-	gpio_request(trimslice_lvds_shutdown, "dvi shutdown");
-	gpio_direction_output(trimslice_lvds_shutdown, 0);
-	tegra_gpio_enable(trimslice_lvds_shutdown);
-
 	trimslice_carveouts[1].base = tegra_carveout_start;
 	trimslice_carveouts[1].size = tegra_carveout_size;
 
@@ -276,7 +270,6 @@ int __init trimslice_panel_init(void)
 	   This is required as the devices use mutual resource (PLL_D)
 	   and should be aware of the neighbour's requirements.
 	 */
-#if 0
 	trimslice_disp1_device.dev_neighbour =
 		(struct device *) &trimslice_disp2_device;
 	trimslice_disp2_device.dev_neighbour =
@@ -288,7 +281,6 @@ int __init trimslice_panel_init(void)
 	((struct tegra_dc_platform_data*)
 		(trimslice_disp2_device.dev.platform_data))->default_mode =
 		tegra_default_hdmi_mode;
-#endif
 
 	if (!err)
 		err = nvhost_device_register(&trimslice_disp1_device);
@@ -297,4 +289,3 @@ int __init trimslice_panel_init(void)
 #endif
 	return err;
 }
-
