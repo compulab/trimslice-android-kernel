@@ -665,7 +665,7 @@ struct _pll_div {
 /* The size in bits of the pll divide multiplied by 10
  * to allow rounding later */
 #define FIXED_PLL_SIZE ((1 << 22) * 10)
-
+#define do_div __do_div_asm
 static void pll_factors(struct _pll_div *pll_div, unsigned int target,
 	unsigned int source)
 {
