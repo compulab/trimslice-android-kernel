@@ -947,12 +947,6 @@ static unsigned long tegra_dc_calc_win_bandwidth(struct tegra_dc *dc,
 		(win_use_v_filter(w) ? 2 : 1) * dfixed_trunc(w->w) / w->out_w *
 		(WIN_IS_TILED(w) ? tiled_windows_bw_multiplier : 1);
 
-/*
- * Assuming 60% efficiency: i.e. if we calculate we need 70MBps, we
- * will request 117MBps from EMC.
- */
-	ret = ret + (17 * ret / 25);
-
 	/* if overflowed */
 	if (ret > (1UL << 31))
 		return ULONG_MAX;
