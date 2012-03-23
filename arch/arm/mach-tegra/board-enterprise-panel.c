@@ -479,7 +479,7 @@ static int avdd_dsi_csi_rail_disable(void)
 	int ret;
 
 	if (enterprise_dsi_reg == NULL) {
-		pr_warn("%s: unbalanced disable\n");
+		pr_warn("%s: unbalanced disable\n", __func__);
 		return -EIO;
 	}
 
