@@ -69,6 +69,7 @@
 #include <linux/usb/cdc.h>
 #include <asm/byteorder.h>
 #include <asm/unaligned.h>
+#include <asm/cacheflush.h>
 #include <linux/list.h>
 
 #include "cdc-acm.h"
@@ -189,6 +190,13 @@ static int acm_start_wb(struct acm *acm, struct acm_wb *wb)
 	wb->urb->transfer_dma = wb->dmah;
 	wb->urb->transfer_buffer_length = wb->len;
 	wb->urb->dev = acm->dev;
+
+	/* flush tx buffer from cache */
+	if (wb->len) {
+		dmac_flush_range(wb->buf, wb->buf + wb->len);
+		outer_flush_range(__pa(wb->buf), __pa(wb->buf+wb->len));
+	}
+
 	rc = usb_submit_urb(wb->urb, GFP_ATOMIC);
 	if (rc < 0) {
 		dbg("usb_submit_urb(write bulk) failed: %d", rc);
@@ -387,6 +395,13 @@ static void acm_read_bulk(struct urb *urb)
 
 	buf = rcv->buffer;
 	buf->size = urb->actual_length;
+
+	if (unlikely(status != 0) && urb->actual_length > 0) {
+		/* we force urb->status to success, do not drop the buffer */
+		pr_info("%s: rx urb was canceled but received a buffer %d\n",
+			__func__, urb->actual_length);
+		status = 0;
+	}
 
 	if (likely(status == 0)) {
 		spin_lock(&acm->read_lock);
@@ -596,6 +611,11 @@ static int acm_tty_open(struct tty_struct *tty, struct file *filp)
 	int rv = -ENODEV;
 	int i;
 	dbg("Entering acm_tty_open.");
+
+	if (!tty) {
+		pr_err("%s: !tty\n", __func__);
+		return -EINVAL;
+	}
 
 	mutex_lock(&open_mutex);
 
@@ -1357,9 +1377,10 @@ skip_countries:
 	usb_set_intfdata(data_interface, acm);
 
 	usb_get_intf(control_interface);
-	tty_register_device(acm_tty_driver, minor, &control_interface->dev);
 
 	acm_table[minor] = acm;
+
+	tty_register_device(acm_tty_driver, minor, &control_interface->dev);
 
 	return 0;
 alloc_fail8:
