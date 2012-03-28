@@ -2410,9 +2410,9 @@ static bool _tegra_dc_controller_enable(struct tegra_dc *dc)
 	tegra_dc_writel(dc, 0, DC_CMD_INT_ENABLE);
 	tegra_dc_writel(dc, 0, DC_CMD_INT_MASK);
 
-	enable_dc_irq(dc->irq);
-
 	tegra_dc_init(dc);
+
+	enable_dc_irq(dc->irq);
 
 	if (dc->out_ops && dc->out_ops->enable)
 		dc->out_ops->enable(dc);
