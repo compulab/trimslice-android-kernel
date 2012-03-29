@@ -7707,7 +7707,7 @@ static void detach_destroy_domains(const struct cpumask *cpu_map)
 
 	for_each_cpu(i, cpu_map)
 		cpu_attach_domain(NULL, &def_root_domain, i);
-	synchronize_sched();
+	synchronize_sched_expedited();
 	arch_destroy_sched_domains(cpu_map, to_cpumask(tmpmask));
 }
 
