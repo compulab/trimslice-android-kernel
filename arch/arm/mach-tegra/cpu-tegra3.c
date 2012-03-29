@@ -308,7 +308,7 @@ static struct notifier_block min_cpus_notifier = {
 	.notifier_call = min_cpus_notify,
 };
 
-void tegra_auto_hotplug_governor(unsigned int cpu_freq, bool suspend)
+void tegra3_auto_hotplug_governor(unsigned int cpu_freq, bool suspend)
 {
 	unsigned long up_delay, top_freq, bottom_freq;
 
@@ -386,7 +386,7 @@ void tegra_auto_hotplug_governor(unsigned int cpu_freq, bool suspend)
 	}
 }
 
-int tegra_auto_hotplug_init(struct mutex *cpu_lock)
+int tegra3_auto_hotplug_init(struct mutex *cpu_lock)
 {
 	/*
 	 * Not bound to the issuer CPU (=> high-priority), has rescue worker
@@ -544,7 +544,7 @@ err_out:
 late_initcall(tegra_auto_hotplug_debug_init);
 #endif
 
-void tegra_auto_hotplug_exit(void)
+void tegra3_auto_hotplug_exit(void)
 {
 	destroy_workqueue(hotplug_wq);
 #ifdef CONFIG_DEBUG_FS

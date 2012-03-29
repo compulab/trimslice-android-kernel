@@ -22,13 +22,16 @@
 #include <linux/gpio.h>
 #include <linux/regulator/consumer.h>
 #include <linux/resource.h>
+
 #include <asm/mach-types.h>
+
 #include <linux/platform_device.h>
 #include <linux/earlysuspend.h>
 #include <linux/kernel.h>
 #include <linux/pwm_backlight.h>
 #include <linux/tegra_pwm_bl.h>
 #include <linux/nvhost.h>
+
 #include <mach/nvmap.h>
 #include <mach/irqs.h>
 #include <mach/iomap.h>
@@ -38,6 +41,7 @@
 #include "devices.h"
 #include "gpio-names.h"
 #include "board.h"
+#include "cpu-tegra.h"
 
 #define whistler_hdmi_hpd	TEGRA_GPIO_PN7
 
@@ -310,11 +314,12 @@ struct early_suspend whistler_panel_early_suspender;
 
 static void whistler_panel_early_suspend(struct early_suspend *h)
 {
-        /* power down LCD, add use a black screen for HDMI */
-        if (num_registered_fb > 0)
-                fb_blank(registered_fb[0], FB_BLANK_POWERDOWN);
-        if (num_registered_fb > 1)
-                fb_blank(registered_fb[1], FB_BLANK_NORMAL);
+	/* power down LCD, add use a black screen for HDMI */
+	if (num_registered_fb > 0)
+		fb_blank(registered_fb[0], FB_BLANK_POWERDOWN);
+
+	if (num_registered_fb > 1)
+		fb_blank(registered_fb[1], FB_BLANK_NORMAL);
 
 #ifdef CONFIG_TEGRA_CONVSERVATIVE_GOV_ON_EARLYSUPSEND
 	cpufreq_save_default_governor();
@@ -328,11 +333,19 @@ static void whistler_panel_early_suspend(struct early_suspend *h)
 	cpufreq_set_conservative_governor_param("freq_step",
 		SET_CONSERVATIVE_GOVERNOR_FREQ_STEP);
 #endif
+#ifdef CONFIG_TEGRA_AUTO_HOTPLUG
+	tegra2_enable_autoplug();
+#endif
 }
 
 static void whistler_panel_late_resume(struct early_suspend *h)
 {
 	unsigned i;
+
+#ifdef CONFIG_TEGRA_AUTO_HOTPLUG
+	tegra2_disable_autoplug();
+#endif
+
 #ifdef CONFIG_TEGRA_CONVSERVATIVE_GOV_ON_EARLYSUPSEND
 	cpufreq_restore_default_governor();
 #endif
