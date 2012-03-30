@@ -873,8 +873,8 @@ static irqreturn_t tps80031_irq(int irq, void *data)
 	acks = (tmp[2] << 16) | (tmp[1] << 8) | tmp[0];
 
 	if (acks) {
-		ret = tps80031_writes(tps80031->dev, SLAVE_ID2,
-				      TPS80031_INT_STS_A, 3, tmp);
+		ret = tps80031_write(tps80031->dev, SLAVE_ID2,
+				      TPS80031_INT_STS_A, 0);
 		if (ret < 0) {
 			dev_err(tps80031->dev, "failed to write "
 						"interrupt status\n");
