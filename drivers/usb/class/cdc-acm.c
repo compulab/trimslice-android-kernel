@@ -642,6 +642,15 @@ static int acm_tty_open(struct tty_struct *tty, struct file *filp)
 		goto out;
 	}
 
+	INIT_LIST_HEAD(&acm->spare_read_urbs);
+	INIT_LIST_HEAD(&acm->spare_read_bufs);
+	INIT_LIST_HEAD(&acm->filled_read_bufs);
+
+	for (i = 0; i < acm->rx_buflimit; i++)
+		list_add(&(acm->ru[i].list), &acm->spare_read_urbs);
+	for (i = 0; i < acm->rx_buflimit; i++)
+		list_add(&(acm->rb[i].list), &acm->spare_read_bufs);
+
 	acm->ctrlurb->dev = acm->dev;
 	if (usb_submit_urb(acm->ctrlurb, GFP_KERNEL)) {
 		dbg("usb_submit_urb(ctrl irq) failed");
@@ -653,15 +662,6 @@ static int acm_tty_open(struct tty_struct *tty, struct file *filp)
 		goto full_bailout;
 
 	usb_autopm_put_interface(acm->control);
-
-	INIT_LIST_HEAD(&acm->spare_read_urbs);
-	INIT_LIST_HEAD(&acm->spare_read_bufs);
-	INIT_LIST_HEAD(&acm->filled_read_bufs);
-
-	for (i = 0; i < acm->rx_buflimit; i++)
-		list_add(&(acm->ru[i].list), &acm->spare_read_urbs);
-	for (i = 0; i < acm->rx_buflimit; i++)
-		list_add(&(acm->rb[i].list), &acm->spare_read_bufs);
 
 	acm->throttle = 0;
 
@@ -677,6 +677,11 @@ out:
 full_bailout:
 	usb_kill_urb(acm->ctrlurb);
 bail_out:
+	for (i = 0; i < acm->rx_buflimit; i++)
+		list_del(&(acm->ru[i].list));
+	for (i = 0; i < acm->rx_buflimit; i++)
+		list_del(&(acm->rb[i].list));
+
 	acm->port.count--;
 	mutex_unlock(&acm->mutex);
 	usb_autopm_put_interface(acm->control);
@@ -1430,6 +1435,7 @@ static void acm_disconnect(struct usb_interface *intf)
 	struct acm *acm = usb_get_intfdata(intf);
 	struct usb_device *usb_dev = interface_to_usbdev(intf);
 	struct tty_struct *tty;
+	struct urb *res;
 
 	/* sibling interface is already cleaning up */
 	if (!acm)
@@ -1449,7 +1455,10 @@ static void acm_disconnect(struct usb_interface *intf)
 
 	stop_data_traffic(acm);
 
-	usb_kill_anchored_urbs(&acm->deferred);
+	/* decrement ref count of anchored urbs */
+	while ((res = usb_get_from_anchor(&acm->deferred)))
+		usb_put_urb(res);
+
 	acm_write_buffers_free(acm);
 	usb_free_coherent(usb_dev, acm->ctrlsize, acm->ctrl_buffer,
 			  acm->ctrl_dma);
