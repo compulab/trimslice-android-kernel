@@ -224,13 +224,16 @@ static int tegra_camera_clk_set_rate(struct tegra_camera_dev *dev)
 static int tegra_camera_reset(struct tegra_camera_dev *dev, uint id)
 {
 	struct clk *clk;
+	int mc_client = -1;
 
 	switch (id) {
 	case TEGRA_CAMERA_MODULE_VI:
 		clk = dev->vi_clk;
+		mc_client = TEGRA_POWERGATE_VENC;
 		break;
 	case TEGRA_CAMERA_MODULE_ISP:
 		clk = dev->isp_clk;
+		mc_client = TEGRA_POWERGATE_VENC;
 		break;
 	case TEGRA_CAMERA_MODULE_CSI:
 		clk = dev->csi_clk;
@@ -238,9 +241,24 @@ static int tegra_camera_reset(struct tegra_camera_dev *dev, uint id)
 	default:
 		return -EINVAL;
 	}
+
+	if (mc_client != -1)
+		tegra_powergate_mc_disable(mc_client);
+
 	tegra_periph_reset_assert(clk);
+
+	if (mc_client != -1)
+		tegra_powergate_mc_flush(mc_client);
+
 	udelay(10);
+
+	if (mc_client != -1)
+		tegra_powergate_mc_flush_done(mc_client);
+
 	tegra_periph_reset_deassert(clk);
+
+	if (mc_client != -1)
+		tegra_powergate_mc_enable(mc_client);
 
 	return 0;
 }
@@ -609,4 +627,3 @@ static void __exit tegra_camera_exit(void)
 
 module_init(tegra_camera_init);
 module_exit(tegra_camera_exit);
-
