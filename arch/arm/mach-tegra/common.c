@@ -126,7 +126,7 @@ static int max_cpu_current;
 /* WARNING: There is implicit client of pllp_out3 like i2c, uart, dsi
  * and so this clock (pllp_out3) should never be disabled.
  */
-static __initdata struct tegra_clk_init_table common_clk_init_table[] = {
+static __initdata struct tegra_clk_init_table common_clk_init_table_[] = {
 	/* name		parent		rate		enabled */
 	{ "clk_m",	NULL,		0,		true },
 #ifdef CONFIG_TEGRA_SILICON_PLATFORM
@@ -190,6 +190,74 @@ static __initdata struct tegra_clk_init_table common_clk_init_table[] = {
 	{ "cbus",	"pll_c",	416000000,	false },
 	{ "pll_c_out1",	"pll_c",	208000000,	false },
 	{ "mselect",	"pll_p",	102000000,	true },
+#endif
+	{ NULL,		NULL,		0,		0},
+};
+
+static __initdata struct tegra_clk_init_table common_clk_init_table[] = {
+	/* name		parent		rate		enabled */
+	{ "clk_m",	NULL,		0,		true },
+#ifdef CONFIG_TEGRA_SILICON_PLATFORM
+#ifdef CONFIG_ARCH_TEGRA_2x_SOC
+	{ "pll_p",	"clk_m",	216000000,	true },
+	{ "pll_p_out1",	"pll_p",	28800000,	true },
+	{ "pll_p_out2",	"pll_p",	48000000,	true },
+	{ "pll_p_out3",	"pll_p",	72000000,	true },
+	{ "pll_p_out4",	"pll_p",	108000000,	true },
+	{ "pll_m_out1",	"pll_m",	120000000,	true },
+#ifdef CONFIG_MACH_TRIMSLICE
+	{ "sclk",	"pll_m_out1",	120000000,	true },
+	{ "hclk",	"sclk",		120000000,	true },
+	{ "pclk",	"hclk",		60000000,	true },
+	{ "pll_x",	NULL,		0,		true },
+	{ "rtc",	NULL,		0,		true },
+#else
+	{ "sclk",	"pll_c_out1",	40000000,	true },
+	{ "hclk",	"sclk",		40000000,	true },
+	{ "pclk",	"hclk",		40000000,	true },
+	{ "mpe",	"pll_c",	0,		false },
+	{ "epp",	"pll_c",	0,		false },
+	{ "vi_sensor",	"pll_c",	0,		false },
+	{ "vi",		"pll_c",	0,		false },
+	{ "2d",		"pll_c",	0,		false },
+        { "3d",		"pll_c",	0,		false },
+#endif
+#else
+	{ "pll_p",	NULL,		408000000,	true },
+	{ "pll_p_out1",	"pll_p",	9600000,	true },
+	{ "pll_p_out2",	"pll_p",	48000000,	true },
+	{ "pll_p_out3",	"pll_p",	102000000,	true },
+	{ "pll_m_out1",	"pll_m",	275000000,	false },
+	{ "pll_p_out4",	"pll_p",	102000000,	true },
+	{ "sclk",	"pll_p_out4",	102000000,	true },
+	{ "hclk",	"sclk",		102000000,	true },
+	{ "pclk",	"hclk",		51000000,	true },
+#endif
+#else
+	{ "pll_p",	NULL,		216000000,	true },
+	{ "pll_p_out1",	"pll_p",	28800000,	true },
+	{ "pll_p_out2",	"pll_p",	48000000,	true },
+	{ "pll_p_out3",	"pll_p",	72000000,	true },
+	{ "pll_m_out1",	"pll_m",	275000000,	true },
+	{ "pll_c",	NULL,		ULONG_MAX,	false },
+	{ "pll_c_out1",	"pll_c",	208000000,	false },
+	{ "pll_p_out4",	"pll_p",	108000000,	true },
+	{ "sclk",	"pll_p_out4",	108000000,	true },
+	{ "hclk",	"sclk",		108000000,	true },
+	{ "pclk",	"hclk",		54000000,	true },
+#endif
+	{ "csite",	NULL,		0,		true },
+	{ "emc",	NULL,		0,		true },
+	{ "cpu",	NULL,		0,		true },
+	{ "kfuse",	NULL,		0,		true },
+	{ "fuse",	NULL,		0,		true },
+	{ "pll_u",	NULL,		480000000,	false },
+	{ "sdmmc1",	"pll_p",	48000000,	false},
+	{ "sdmmc3",	"pll_p",	48000000,	false},
+	{ "sdmmc4",	"pll_p",	48000000,	false},
+#ifndef CONFIG_ARCH_TEGRA_2x_SOC
+	{ "cbus",	"pll_c",	416000000,	false },
+	{ "pll_c_out1",	"pll_c",	208000000,	false },
 #endif
 	{ NULL,		NULL,		0,		0},
 };
@@ -337,7 +405,9 @@ static void __init tegra_init_power(void)
         tegra_powergate_partition_with_clk_off(TEGRA_POWERGATE_SATA);
 #endif
 #ifdef CONFIG_ARCH_TEGRA_HAS_PCIE
-	tegra_powergate_partition_with_clk_off(TEGRA_POWERGATE_PCIE);
+		/*
+		* tegra_powergate_partition_with_clk_off(TEGRA_POWERGATE_PCIE);
+		*/ 
 #endif
 }
 

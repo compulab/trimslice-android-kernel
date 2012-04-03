@@ -24,5 +24,6 @@
 #define TRIMSLICE_GPIO_USB2_RST		TEGRA_GPIO_PV0 /* USB2 PHY reset */
 
 void trimslice_pinmux_init(void);
+int trimslice_panel_init(void);
 
 #endif

@@ -37,7 +37,7 @@
 #include "clock.h"
 #include "dvfs.h"
 
-#define DISABLE_BOOT_CLOCKS 1
+#define DISABLE_BOOT_CLOCKS 0
 
 /*
  * Locking:
@@ -737,7 +737,7 @@ static int __init tegra_keep_boot_clocks_setup(char *__unused)
 __setup("tegra_keep_boot_clocks", tegra_keep_boot_clocks_setup);
 
 /*
- * Bootloader may not match kernel restrictions on CPU clock sources.
+ * Bootloader may not match kernel restrictions on CPU clock sources.bootloader
  * Make sure CPU clock is sourced from either main or backup parent.
  */
 static int tegra_sync_cpu_clock(void)

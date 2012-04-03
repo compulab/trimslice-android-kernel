@@ -491,6 +491,8 @@ struct tegra_dc_platform_data {
 };
 
 #define TEGRA_DC_FLAG_ENABLED		(1 << 0)
+#define TEGRA_DC_FLAG_USE_EDID		(1 << 1)
+
 
 struct tegra_dc *tegra_dc_get_dc(unsigned idx);
 struct tegra_dc_win *tegra_dc_get_window(struct tegra_dc *dc, unsigned win);
