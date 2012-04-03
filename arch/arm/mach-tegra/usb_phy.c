@@ -1012,7 +1012,7 @@ static void utmip_phy_enable_trking_data(struct tegra_usb_phy *phy)
 	init_done = true;
 }
 
-static utmip_powerdown_pmc_wake_detect(struct tegra_usb_phy *phy)
+static void utmip_powerdown_pmc_wake_detect(struct tegra_usb_phy *phy)
 {
 	unsigned long val;
 	void __iomem *pmc_base = IO_ADDRESS(TEGRA_PMC_BASE);
@@ -1044,7 +1044,7 @@ static utmip_powerdown_pmc_wake_detect(struct tegra_usb_phy *phy)
 	writel(val, pmc_base + PMC_SLEEP_CFG);
 }
 
-static utmip_powerup_pmc_wake_detect(struct tegra_usb_phy *phy)
+static void utmip_powerup_pmc_wake_detect(struct tegra_usb_phy *phy)
 {
 	unsigned long val;
 	void __iomem *pmc_base = IO_ADDRESS(TEGRA_PMC_BASE);
@@ -1058,7 +1058,7 @@ static utmip_powerup_pmc_wake_detect(struct tegra_usb_phy *phy)
 	mdelay(1);
 }
 
-static uhsic_powerdown_pmc_wake_detect(struct tegra_usb_phy *phy)
+static void uhsic_powerdown_pmc_wake_detect(struct tegra_usb_phy *phy)
 {
 	unsigned long val;
 	void __iomem *pmc_base = IO_ADDRESS(TEGRA_PMC_BASE);
@@ -1403,9 +1403,9 @@ static void utmip_setup_pmc_wake_detect(struct tegra_usb_phy *phy)
 	val = readl(pmc_base + PMC_SLEEPWALK_REG(inst));
 	val &= ~UTMIP_AP_A;
 	val |= UTMIP_USBOP_RPD_A | UTMIP_USBON_RPD_A| UTMIP_AN_A | UTMIP_HIGHZ_A |
-		UTMIP_USBOP_RPD_B | UTMIP_USBON_RPD_B | UTMIP_AP_B |
-		UTMIP_USBOP_RPD_C | UTMIP_USBON_RPD_C | UTMIP_AP_C |
-		UTMIP_USBOP_RPD_D | UTMIP_USBON_RPD_D | UTMIP_AP_D;
+		UTMIP_USBOP_RPD_B | UTMIP_USBON_RPD_B | UTMIP_AP_B | UTMIP_AN_B |
+		UTMIP_USBOP_RPD_C | UTMIP_USBON_RPD_C | UTMIP_AP_C | UTMIP_AN_C |
+		UTMIP_USBOP_RPD_D | UTMIP_USBON_RPD_D | UTMIP_AP_D | UTMIP_AN_D;
 	writel(val, pmc_base + PMC_SLEEPWALK_REG(inst));
 
 	if (port_speed == TEGRA_USB_PHY_PORT_SPEED_LOW) {
