@@ -175,29 +175,20 @@ struct tegra_ulpi_config ehci2_phy_config = {
 	.clk = "cdev2",
 };
 
-static struct tegra_ehci_platform_data ehci_ulpi_data = {
-	.operating_mode = TEGRA_USB_HOST,
-	.phy_config = &ehci2_phy_config,
-    .phy_type = TEGRA_USB_PHY_TYPE_LINK_ULPI,
-};
-
-static struct tegra_ehci_platform_data ehci_utmi_data = {
-	.operating_mode = TEGRA_USB_HOST,
-};
-
 static void trimslice_usb_init(void)
 {
-	tegra_ehci3_device.dev.platform_data = &ehci_utmi_data;
-	platform_device_register(&tegra_ehci3_device);
+	int err;
 
-	tegra_ehci2_device.dev.platform_data = &ehci_ulpi_data;
+	platform_device_register(&tegra_ehci3_device);
 	platform_device_register(&tegra_ehci2_device);
 
-	tegra_gpio_enable(TEGRA_GPIO_PV2);
-	gpio_request(TEGRA_GPIO_PV2, "usb1 mode");
-	gpio_direction_output(TEGRA_GPIO_PV2, 1);
+	err = gpio_request_one(TRIMSLICE_GPIO_USB1_MODE, GPIOF_OUT_INIT_HIGH,
+			       "usb1mode");
+	if (err) {
+		pr_err("TrimSlice: failed to obtain USB1 mode gpio: %d\n", err);
+		return;
+	}
 
-	tegra_ehci1_device.dev.platform_data = &ehci_utmi_data;
 	platform_device_register(&tegra_ehci1_device);
 }
 

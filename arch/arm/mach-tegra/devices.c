@@ -597,13 +597,14 @@ static struct tegra_ulpi_config tegra_ehci2_ulpi_phy_config = {
 };
 
 static struct tegra_ehci_platform_data tegra_ehci1_pdata = {
-	.operating_mode = TEGRA_USB_OTG,
+	.operating_mode = TEGRA_USB_HOST,
 	.power_down_on_bus_suspend = 1,
 };
 
 static struct tegra_ehci_platform_data tegra_ehci2_pdata = {
 	.phy_config = &tegra_ehci2_ulpi_phy_config,
 	.operating_mode = TEGRA_USB_HOST,
+	.phy_type = TEGRA_USB_PHY_TYPE_LINK_ULPI,
 	.power_down_on_bus_suspend = 1,
 };
 
