@@ -695,9 +695,10 @@ void hdmi_eld_update_pcm_info(struct hdmi_eld *eld, struct hda_pcm_stream *pcm,
 	for (i = 0; i < eld->sad_count; i++) {
 		struct cea_sad *a = &eld->sad[i];
 		pcm->rates |= a->rates;
-		if (a->channels > pcm->channels_max)
-			pcm->channels_max = a->channels;
+
 		if (a->format == AUDIO_CODING_TYPE_LPCM) {
+			if (a->channels > pcm->channels_max)
+				pcm->channels_max = a->channels;
 			if (a->sample_bits & AC_SUPPCM_BITS_20) {
 				pcm->formats |= SNDRV_PCM_FMTBIT_S32_LE;
 				if (pcm->maxbps < 20)
