@@ -161,6 +161,14 @@ static void tegra_sdhci_writel(struct sdhci_host *host, u32 val, int reg)
 #endif
 }
 
+static unsigned int tegra_sdhci_get_cd(struct sdhci_host *sdhci)
+{
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(sdhci);
+	struct tegra_sdhci_host *tegra_host = pltfm_host->priv;
+
+	return tegra_host->card_present;
+}
+
 static unsigned int tegra_sdhci_get_ro(struct sdhci_host *sdhci)
 {
 	struct platform_device *pdev = to_platform_device(mmc_dev(sdhci->mmc));
@@ -880,6 +888,13 @@ static int tegra_sdhci_pltfm_init(struct sdhci_host *host,
 		plat->mmc_data.register_status_notify(sdhci_status_notify_cb, host);
 	}
 
+        /*
+         * If there is no card detect gpio, assume that the
+         * card is always present.
+         */
+        if (!gpio_is_valid(plat->cd_gpio))
+                tegra_host->card_present = 1;
+
 	if (plat->mmc_data.status) {
 		plat->mmc_data.card_present = plat->mmc_data.status(mmc_dev(host->mmc));
 	}
@@ -1112,6 +1127,7 @@ static int tegra_sdhci_resume(struct sdhci_host *sdhci)
 
 static struct sdhci_ops tegra_sdhci_ops = {
 	.get_ro     = tegra_sdhci_get_ro,
+	.get_cd     = tegra_sdhci_get_cd,
 	.read_l     = tegra_sdhci_readl,
 	.read_w     = tegra_sdhci_readw,
 	.write_l    = tegra_sdhci_writel,
@@ -1137,7 +1153,8 @@ struct sdhci_pltfm_data sdhci_tegra_pdata = {
 #endif
 		  SDHCI_QUIRK_SINGLE_POWER_WRITE |
 		  SDHCI_QUIRK_NO_HISPD_BIT |
-		  SDHCI_QUIRK_BROKEN_ADMA_ZEROLEN_DESC,
+		  SDHCI_QUIRK_BROKEN_ADMA_ZEROLEN_DESC |
+		  SDHCI_QUIRK_BROKEN_CARD_DETECTION,
 	.ops  = &tegra_sdhci_ops,
 	.init = tegra_sdhci_pltfm_init,
 	.exit = tegra_sdhci_pltfm_exit,
