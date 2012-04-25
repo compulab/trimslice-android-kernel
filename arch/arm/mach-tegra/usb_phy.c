@@ -1338,7 +1338,7 @@ static void utmip_setup_pmc_wake_detect(struct tegra_usb_phy *phy)
 	/* config debouncer */
 	val = readl(pmc_base + PMC_USB_DEBOUNCE);
 	val &= ~UTMIP_LINE_DEB_CNT(~0);
-	val |= UTMIP_LINE_DEB_CNT(1);
+	val |= UTMIP_LINE_DEB_CNT(0x4);
 	writel(val, pmc_base + PMC_USB_DEBOUNCE);
 
 	/* Make sure nothing is happening on the line with respect to PMC */
@@ -1516,7 +1516,7 @@ static void utmip_phy_disable_pmc_bus_ctrl(struct tegra_usb_phy *phy)
 	void __iomem *base = phy->regs;
 
 	val = readl(pmc_base + PMC_SLEEP_CFG);
-	val &= ~UTMIP_WAKE_VAL(inst, 0x0);
+	val &= ~UTMIP_WAKE_VAL(inst, 0xf);
 	val |= UTMIP_WAKE_VAL(inst, WAKE_VAL_NONE);
 	writel(val, pmc_base + PMC_SLEEP_CFG);
 
@@ -3225,7 +3225,7 @@ bool tegra_usb_phy_is_remotewake_detected(struct tegra_usb_phy *phy)
 		val = readl(pmc_base + UTMIP_UHSIC_STATUS);
 		if (UTMIP_WAKE_ALARM(inst) & val) {
 			val = readl(pmc_base + PMC_SLEEP_CFG);
-			val &= ~UTMIP_WAKE_VAL(inst, 0x0);
+			val &= ~UTMIP_WAKE_VAL(inst, 0xf);
 			val |= UTMIP_WAKE_VAL(inst, WAKE_VAL_NONE);
 			writel(val, pmc_base + PMC_SLEEP_CFG);
 
