@@ -213,6 +213,7 @@ static int enterprise_hdmi_vddio_enable(void)
 		enterprise_hdmi_vddio = NULL;
 		return ret;
 	}
+	msleep(20);
 	return ret;
 }
 
