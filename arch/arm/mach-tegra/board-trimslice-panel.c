@@ -38,6 +38,13 @@
 
 #define trimslice_lvds_shutdown	TEGRA_GPIO_PP5
 #define trimslice_hdmi_hpd	TEGRA_GPIO_PN7
+#define RGB_XRES		1280	//720	//1366
+#define RGB_YRES		720	//480	//768
+#define RGB_COLOR_DEPTH		32
+#define HDMI_XRES		1280
+#define HDMI_YRES		720
+#define HDMI_COLOR_DEPTH	32
+
 
 static int trimslice_panel_enable(void)
 {
@@ -108,16 +115,16 @@ static struct resource trimslice_disp2_resources[] = {
 
 static struct tegra_fb_data trimslice_fb_data = {
 	.win		= 0,
-	.xres		= 1366,
-	.yres		= 768,
-	.bits_per_pixel	= 32,
+	.xres		= RGB_XRES,
+	.yres		= RGB_YRES,
+	.bits_per_pixel	= RGB_COLOR_DEPTH,
 	.flags		= TEGRA_FB_FLIP_ON_PROBE,
 };
 
 static struct tegra_fb_data trimslice_hdmi_fb_data = {
-	.xres		= 1366,
-	.yres		= 768,
-	.bits_per_pixel	= 32,
+	.xres		= HDMI_XRES,
+	.yres		= HDMI_YRES,
+	.bits_per_pixel	= HDMI_COLOR_DEPTH,
 	.flags		= TEGRA_FB_FLIP_ON_PROBE,
 };
 
@@ -231,6 +238,8 @@ static int __init tegra_default_hdmi_mode_setup(char *options)
 		tegra_default_hdmi_mode = 2;
 	else if (!strcmp(options, "1080p"))
 		tegra_default_hdmi_mode = 3;
+	else if (!strcmp(options, "hdready"))
+		tegra_default_hdmi_mode = 4;
 	else
 		tegra_default_hdmi_mode = 0;
 	return 0;

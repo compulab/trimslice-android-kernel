@@ -359,7 +359,7 @@ const struct fb_videomode *fb_find_best_supported_mode(const struct fb_monspecs 
 		best_refresh = 0;
 		best = &tmp_mode;
 
-		pr_info ("monitor aspect ratio = %d (%dx%d)",display_aspect_ratio,specs->max_x,specs->max_y);
+		pr_info ("monitor aspect ratio = %d (%dx%d) \n",display_aspect_ratio,specs->max_x,specs->max_y);
 		/* Find maximum supported resolution with proper aspect ratio
 		   and maximum refresh rate */
 		list_for_each(pos, head) {
@@ -398,7 +398,7 @@ const struct fb_videomode *fb_find_best_supported_mode(const struct fb_monspecs 
 	/* last resort, use the very first mode */
 	best = m1;
 finished:
-	pr_info("best mode selected: %dx%d-%d",
+	pr_info("best mode selected: %dx%d-%d \n",
 		best->xres,best->yres,best->refresh);
 	return best;
 }
@@ -408,6 +408,7 @@ void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
 			      bool (*mode_filter)(const struct tegra_dc *dc, struct fb_videomode *mode))
 {
 	struct fb_event event;
+	struct fb_modelist *m;
 	int i;
 	bool use_first_detailed_mode = false;
 
@@ -446,6 +447,28 @@ void tegra_fb_update_monspecs(struct tegra_fb_info *fb_info,
 		} else {
 			fb_add_videomode(&specs->modedb[i], &fb_info->info->modelist);
 		}
+	}
+
+	if (list_empty(&fb_info->info->modelist)) {
+		struct tegra_dc_mode mode;
+		memset(&fb_info->info->var, 0x0, sizeof(fb_info->info->var));
+		memset(&mode, 0x0, sizeof(mode));
+		tegra_dc_set_mode(fb_info->win->dc, &mode);
+	} else {
+		/* in case the first mode was not matched */
+		m = list_first_entry(&fb_info->info->modelist, struct fb_modelist, list);
+		m->mode.flag |= FB_MODE_IS_FIRST;
+
+		if (!use_first_detailed_mode) {
+			specs->misc &= ~FB_MISC_1ST_DETAIL;
+			pr_info("warning: native resolution isn't supported. \n");
+		}
+
+		fb_info->info->mode = (struct fb_videomode *)
+			fb_find_best_supported_mode(specs, &fb_info->info->modelist);
+
+		fb_videomode_to_var(&fb_info->info->var, fb_info->info->mode);
+		tegra_fb_set_par(fb_info->info);
 	}
 
 	event.info = fb_info->info;

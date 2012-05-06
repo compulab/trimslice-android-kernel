@@ -403,6 +403,7 @@ typedef struct {
 static void tegra_dc_hdmi_enable(struct tegra_dc *dc);
 extern int tegra_dc_check_best_rate(struct tegra_dc_mode *mode);
 extern void tegra_dc_create_default_monspecs(int default_mode, struct fb_monspecs *specs);
+extern void dump_monitor_info(struct fb_monspecs *specs);
 
 static const struct tegra_hdmi_audio_config
 *tegra_hdmi_get_audio_config(unsigned audio_freq, unsigned pix_clock)
@@ -945,15 +946,16 @@ static bool tegra_dc_hdmi_detect(struct tegra_dc *dc)
 	if (!tegra_dc_hdmi_hpd(dc))
 		goto fail;
 
+	dev_info(&dc->ndev->dev, "Detect HDMI \n");
 	err = tegra_edid_get_monspecs(dc->edid, &specs);
 	if (err < 0 && !dc->pdata->default_mode) {
 		dev_err(&dc->ndev->dev, "error reading edid\n");
 		goto fail;
 	}
-    else if (dc->pdata->default_mode) {
-        dev_info(&dc->ndev->dev,"ignore EDID data, using the default HDMI resolutions");
+	else if (dc->pdata->default_mode) {
+		dev_info(&dc->ndev->dev,"ignore EDID data, using the default HDMI resolutions \n");
 		tegra_dc_create_default_monspecs(dc->pdata->default_mode, &specs);
-    }
+	}
 
 	err = tegra_edid_get_eld(dc->edid, &hdmi->eld);
 	if (err < 0) {

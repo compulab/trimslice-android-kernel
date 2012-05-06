@@ -43,6 +43,7 @@
 #define DEFAULT_MODE_TEST       1
 #define DEFAULT_MODE_720P       2
 #define DEFAULT_MODE_1080P      3
+#define DEFAULT_MODE_HDREADY	4
 
 const struct fb_videomode tegra_dc_atp_supported_modes[] = {
 	/* 800x600p 72hz: Syntetic mode used for ATP DVI testing */
@@ -202,6 +203,81 @@ const struct fb_videomode tegra_dc_1080p_supported_modes[] = {
 	},
 };
 
+/* a sample of LG 50PC51R TV set EDID */ 
+const struct fb_videomode tegra_dc_hdready_supported_modes[] = {
+
+	{
+		.xres =		1360,
+		.yres =		768,
+		.pixclock =	KHZ2PICOS(84752),
+		.hsync_len =	136,	/* h_sync_width */
+		.vsync_len =	5,	/* v_sync_width */
+		.left_margin =	208,	/* h_back_porch */
+		.upper_margin =	22,	/* v_back_porch */
+		.right_margin =	72,	/* h_front_porch */
+		.lower_margin =	3,	/* v_front_porch */
+		.vmode =	FB_VMODE_NONINTERLACED,
+		.sync = FB_SYNC_HOR_HIGH_ACT,
+	},
+
+	{
+		.xres = 1280,
+		.yres = 720,
+		.pixclock = KHZ2PICOS(74250),
+		.hsync_len = 128,
+		.vsync_len = 5,
+		.left_margin  = 192,
+		.upper_margin = 20,
+		.right_margin = 64,
+		.lower_margin = 3,
+		.vmode = FB_VMODE_NONINTERLACED,
+		.sync = FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
+	},
+
+	{
+		.xres = 720,
+		.yres = 480,
+		.pixclock = KHZ2PICOS(27000),
+		.hsync_len = 62,
+		.vsync_len = 6,
+		.left_margin  = 60,
+		.upper_margin = 30,
+		.right_margin = 16,
+		.lower_margin = 9,
+		.vmode = FB_VMODE_NONINTERLACED,
+		.sync = 0,
+	},
+
+	{
+		.xres = 1920,
+		.yres = 1080,
+		.pixclock = KHZ2PICOS(74250),
+		.hsync_len = 44,
+		.vsync_len = 10,
+		.left_margin  = 148,
+		.upper_margin = 30,
+		.right_margin = 88,
+		.lower_margin = 4,
+		.vmode = FB_VMODE_INTERLACED,
+		.sync = FB_SYNC_HOR_HIGH_ACT | FB_SYNC_VERT_HIGH_ACT,
+	},
+
+	{
+		.xres = 640,
+		.yres = 480,
+		.pixclock = KHZ2PICOS(25175),
+		.hsync_len = 96,
+		.vsync_len = 2,
+		.left_margin  = 48,
+		.upper_margin = 33,
+		.right_margin = 16,
+		.lower_margin = 1,
+		.vmode = FB_VMODE_NONINTERLACED,
+		.sync = 0,
+	},
+
+};
+
 static struct fb_monspecs __initdata default_monspecs = {
 	   .manufacturer           = "CL",
            .monitor                = "DEFAULT",
@@ -216,7 +292,7 @@ static struct fb_monspecs __initdata default_monspecs = {
 };
 
 
-static void dump_monitor_info(struct fb_monspecs *specs)
+void dump_monitor_info(struct fb_monspecs *specs)
 {
 	int i;
 	pr_err("specs:\n" \
@@ -295,6 +371,12 @@ void tegra_dc_create_default_monspecs(int default_mode,
 	  case DEFAULT_MODE_1080P:
 	        specs->modedb_len = ARRAY_SIZE(tegra_dc_1080p_supported_modes);
 		memcpy(specs->modedb, tegra_dc_1080p_supported_modes,
+		       specs->modedb_len * sizeof(struct fb_videomode));
+		break;
+
+	case DEFAULT_MODE_HDREADY:
+		specs->modedb_len = ARRAY_SIZE(tegra_dc_hdready_supported_modes);
+		memcpy(specs->modedb, tegra_dc_hdready_supported_modes,
 		       specs->modedb_len * sizeof(struct fb_videomode));
 		break;
 	}

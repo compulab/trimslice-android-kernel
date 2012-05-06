@@ -106,6 +106,7 @@ typedef struct {
 } resolutions_t;
 
 extern void tegra_dc_create_default_monspecs(int default_mode, struct fb_monspecs *specs);
+extern void dump_monitor_info(struct fb_monspecs *specs);
 
 void tegra_dc_rgb_enable(struct tegra_dc *dc)
 {
@@ -287,6 +288,7 @@ static bool tegra_dc_rgb_detect(struct tegra_dc *dc)
 	if (!dc->edid)
 		goto fail;
 
+	dev_info(&dc->ndev->dev, "Detect RGB \n");
 	err = tegra_edid_get_monspecs(dc->edid, &specs);
 
 	if (err < 0 && !dc->pdata->default_mode) {
