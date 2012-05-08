@@ -1786,11 +1786,11 @@ static void utmi_phy_restore_end(struct tegra_usb_phy *phy)
 #else
 	unsigned long val;
 	void __iomem *base = phy->regs;
-	int wait_time_us = 3000; /* FPR should be set by this time */
+	int wait_time_us = 25000; /* FPR should be set by this time */
 
 	/* check whether we wake up from the remote resume */
 	if (phy->remote_wakeup) {
-		/* wait until FPR bit is set automatically on remote resume */
+		/* wait until SUSPEND and RESUME bit is cleared on remote resume */
 		do {
 			val = readl(base + USB_PORTSC1);
 			udelay(1);
@@ -1800,7 +1800,7 @@ static void utmi_phy_restore_end(struct tegra_usb_phy *phy)
 				return;
 			}
 			wait_time_us--;
-		} while (!(val & USB_PORTSC1_RESUME));
+		} while (val & (USB_PORTSC1_RESUME | USB_PORTSC1_SUSP));
 		/* wait for 25 ms to port resume complete */
 		msleep(25);
 		/* disable PMC master control */
