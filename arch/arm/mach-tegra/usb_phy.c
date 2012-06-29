@@ -1587,10 +1587,15 @@ static void utmi_phy_disable_obs_bus(struct tegra_usb_phy *phy)
 {
 	unsigned long val;
 	void __iomem *base = phy->regs;
+	unsigned long flags;
 
 	/* check if OBS bus is already enabled */
 	val = readl(base + UTMIP_MISC_CFG0);
 	if (val & UTMIP_DPDM_OBSERVE) {
+
+		/* disable ALL interrupts on current CPU */
+		local_irq_save(flags);
+
 		/* Change the UTMIP OBS bus to drive SE0 */
 		val = readl(base + UTMIP_MISC_CFG0);
 		val &= ~UTMIP_DPDM_OBSERVE_SEL(~0);
@@ -1612,6 +1617,13 @@ static void utmi_phy_disable_obs_bus(struct tegra_usb_phy *phy)
 				COMB_TERMS | ALWAYS_FREE_RUNNING_TERMS);
 		writel(val, base + UTMIP_MISC_CFG0);
 #endif
+
+		val = readl(base + USB_USBCMD);
+		val |= USB_USBCMD_RS;
+		writel(val, base + USB_USBCMD);
+
+		/* restore ALL interrupts on current CPU */
+		local_irq_restore(flags);
 	}
 }
 
