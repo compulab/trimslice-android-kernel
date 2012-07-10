@@ -105,7 +105,7 @@ struct tegra_dc_rgb_data {
 };
 
 static int rgb_filter = 1;
-static int rgb_edid   = 0;
+static int rgb_edid   = 1;
 
 void tegra_dc_rgb_enable(struct tegra_dc *dc)
 {
@@ -202,10 +202,9 @@ static bool tegra_dc_rgb_mode_filter_extra(const struct tegra_dc *dc, struct fb_
 
 static bool tegra_dc_rgb_mode_filter(const struct tegra_dc *dc, struct fb_videomode *mode)
 {
-	bool mode_supported = false;
+	bool mode_supported = true;
 	struct tegra_dc_rgb_data *rgb = (struct tegra_dc_rgb_data *) tegra_dc_get_outdata((struct tegra_dc *) dc);
 
-	mode_supported = tegra_dc_mode_filter(dc,mode);
 	if (mode_supported && tegra_edid_get_filter(rgb->edid)) {
 		/* Don't issue the function if filter is not set */
 		mode_supported = tegra_dc_rgb_mode_filter_extra(dc,mode);
