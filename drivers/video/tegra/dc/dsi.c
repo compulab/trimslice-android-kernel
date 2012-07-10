@@ -929,6 +929,10 @@ static void tegra_dsi_start_dc_stream(struct tegra_dc *dc,
 		val = PIN_OUTPUT_LSPI_OUTPUT_DIS;
 		tegra_dc_writel(dc, val, DC_COM_PIN_OUTPUT_ENABLE3);
 
+#ifdef CONFIG_ARCH_TEGRA_2x_SOC
+                val = PIN_INPUT_LSPI_INPUT_DIS;
+                tegra_dc_writel(dc, val, DC_COM_PIN_INPUT_ENABLE3);
+#endif
 		/* enable MSF & set MSF polarity */
 		val = MSF_ENABLE | MSF_LSPI;
 		if (!dsi->info.te_polarity_low)
