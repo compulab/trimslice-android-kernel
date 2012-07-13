@@ -3242,8 +3242,7 @@ bool tegra_usb_phy_is_remotewake_detected(struct tegra_usb_phy *phy)
 			writel(val, pmc_base + PMC_SLEEP_CFG);
 
 			val = readl(pmc_base + PMC_TRIGGERS);
-			val |= UTMIP_CLR_WAKE_ALARM(inst) |
-				UTMIP_CLR_WALK_PTR(inst);
+			val |= UTMIP_CLR_WAKE_ALARM(inst);
 			writel(val, pmc_base + PMC_TRIGGERS);
 
 			val = readl(base + UTMIP_PMC_WAKEUP0);
