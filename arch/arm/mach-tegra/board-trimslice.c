@@ -61,6 +61,11 @@
 #define PMC_CTRL               0x0
 #define PMC_CTRL_INTR_LOW      (1 << 17)
 
+/* 0 - device
+ * 1 - host
+ */
+#define USB1_DEVICE_OR_HOST	1
+
 
 static struct plat_serial8250_port debug_uart_platform_data[] = {
 	{
@@ -252,25 +257,26 @@ static struct tegra_otg_platform_data tegra_otg_pdata = {
 static void trimslice_usb_init(void)
 {
 	tegra_usb_phy_init(tegra_usb_phy_pdata, ARRAY_SIZE(tegra_usb_phy_pdata));
-	
+
+	tegra_gpio_enable(TEGRA_GPIO_PV2);
+	gpio_request(TEGRA_GPIO_PV2, "usb1 mode");
+	gpio_direction_output(TEGRA_GPIO_PV2, USB1_DEVICE_OR_HOST);
+#if USB1_DEVICE_OR_HOST == 0
+	/* Device mode support is not yet stabilized */
 	/* OTG should be the first to be registered */
-	/*
 	tegra_otg_device.dev.platform_data = &tegra_otg_pdata;
 	platform_device_register(&tegra_otg_device);
 	platform_device_register(&tegra_udc_device);
-	*/
+#else
+	tegra_ehci1_device.dev.platform_data = &tegra_ehci_pdata[0];
+	platform_device_register(&tegra_ehci1_device);
+#endif
+
 	tegra_ehci2_device.dev.platform_data=&tegra_ehci_pdata[1];
 	platform_device_register(&tegra_ehci2_device);
 
 	tegra_ehci3_device.dev.platform_data=&tegra_ehci_pdata[2];
 	platform_device_register(&tegra_ehci3_device);
-
-	tegra_gpio_enable(TEGRA_GPIO_PV2);
-	gpio_request(TEGRA_GPIO_PV2, "usb1 mode");
-	gpio_direction_output(TEGRA_GPIO_PV2, 1);
-
-	tegra_ehci1_device.dev.platform_data = &tegra_ehci_pdata[0];
-	platform_device_register(&tegra_ehci1_device);
 }
 
 static const struct tegra_pingroup_config i2c1_ddc = {
