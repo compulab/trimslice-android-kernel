@@ -155,20 +155,24 @@ static struct platform_device *trimslice_devices[] __initdata = {
 	&tegra_sdhci_device1,
 	&tegra_sdhci_device4,
 	&tegra_pmu_device,
+	&tegra_rtc_device,
 
-	/* &tegra_rtc_device, */
 	&tegra_gart_device,
 	&tegra_aes_device,
-	/* &audio_device, */
 	&tegra_avp_device,
-	// &tegra_i2s_device1,
-	// &tegra_das_device,
-	// &tegra_pcm_device,
-	// &tegra_spdif_device,
-	// &spdif_dit_device,
-	// &trimslice_audio_device0,
-	// &trimslice_audio_device1,
-	// &trimslice_keys_device,
+
+	&tegra_i2s_device1,
+	&tegra_i2s_device2,
+
+	&tegra_das_device,
+
+	&tegra_pcm_device,
+	&tegra_spdif_device,
+	&spdif_dit_device,
+	&trimslice_audio_device0,
+	&trimslice_audio_device1,
+
+	&trimslice_keys_device,
 };
 
 
@@ -331,16 +335,6 @@ static void trimslice_i2c_init(void)
 				ARRAY_SIZE(trimslice_i2c3_board_info));
 }
 
-static void __init tegra_trimslice_fixup(struct machine_desc *desc,
-	struct tag *tags, char **cmdline, struct meminfo *mi)
-{
-	mi->nr_banks = 2;
-	mi->bank[0].start = PHYS_OFFSET;
-	mi->bank[0].size = 448 * SZ_1M;
-	mi->bank[1].start = SZ_512M;
-	mi->bank[1].size = SZ_512M;
-}
-
 static __initdata struct tegra_clk_init_table trimslice_clk_init_table[] = {
 	/* name		parent		rate		enabled */
 	{ "clk_m",	NULL,		12000000,	true},
@@ -351,8 +345,9 @@ static __initdata struct tegra_clk_init_table trimslice_clk_init_table[] = {
 	{ "pll_a",	"pll_p_out1",	56448000,	true },
 	{ "pll_a_out0",	"pll_a",	11289600,	true },
 	{ "cdev1",	"pll_a_out0",	11289600,	true },
-	{ "i2s1",	"pll_a_out0",	11289600,	false },
-	{ "spdif_out",	"pll_a_out0",	11289600,	false },
+	{ "i2s1",	"pll_a_out0",	0,		false },
+	{ "i2s2",	"pll_a_out0",	0,		false },
+	{ "spdif_out",	"pll_a_out0",	0,		false },
 	{ NULL,		NULL,		0,		0},
 };
 
@@ -433,10 +428,11 @@ static void __init tegra_trimslice_init(void)
 
 	platform_add_devices(trimslice_devices, ARRAY_SIZE(trimslice_devices));
 
+//	gpio_direction_output(TEGRA_GPIO_PP4, 0);
 	trimslice_usb_init();
 	trimslice_i2c_init();
 	trimslice_panel_init();
-	//trimslice_keys_init();
+	trimslice_keys_init();
 }
 
 int __init tegra_trimslice_protected_aperture_init(void)
@@ -459,7 +455,6 @@ void __init tegra_trimslice_reserve(void)
 
 MACHINE_START(TRIMSLICE, "trimslice")
 	.boot_params	= 0x00000100,
-/*	.fixup		= tegra_trimslice_fixup, */
 	.map_io         = tegra_map_common_io,
 	.reserve        = tegra_trimslice_reserve,
 	.init_early	= tegra_init_early,

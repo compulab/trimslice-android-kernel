@@ -38,10 +38,12 @@
 
 #include "../codecs/tlv320aic23.h"
 
-#include "tegra_das.h"
-#include "tegra_i2s.h"
 #include "tegra_pcm.h"
 #include "tegra_asoc_utils.h"
+
+#ifdef CONFIG_ARCH_TEGRA_2x_SOC
+#include "tegra20_das.h"
+#endif
 
 #define DRV_NAME "tegra-snd-trimslice"
 
@@ -188,22 +190,22 @@ static struct snd_soc_ops trimslice_spdif_ops = {
 };
 
 static struct snd_soc_dai_link trimslice_tlv320aic23_dai[] = {
-{    /* analog */
+{	/* analog */
 	.name = "TLV320AIC23",
 	.stream_name = "AIC23",
 	.codec_name = "tlv320aic23-codec.2-001a",
 	.platform_name = "tegra-pcm-audio",
-	.cpu_dai_name = "tegra-i2s.0",
+	.cpu_dai_name = "tegra20-i2s.0",
 	.codec_dai_name = "tlv320aic23-hifi",
 	.init = trimslice_asoc_init,
 	.ops = &trimslice_asoc_ops,
 },
-{    /* digital */
+{	/* digital */
 	.name = "SPDIF",
 	.stream_name = "spdif",
-	.codec_name = "spdif-dit",
+	.codec_name = "spdif-dit.0",
 	.platform_name = "tegra-pcm-audio",
-	.cpu_dai_name = "tegra-spdif",
+	.cpu_dai_name = "tegra20-spdif",
 	.codec_dai_name = "dit-hifi",
 	.ops = &trimslice_spdif_ops,
 }
@@ -345,7 +347,7 @@ static int __devexit tegra_snd_trimslice_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct platform_driver tegra_snd_trimslice_driver0 = {
+static struct platform_driver __refdata tegra_snd_trimslice_driver0 = {
 	.driver = {
 		.name = DRV_NAME"-0",
 		.owner = THIS_MODULE,
@@ -354,7 +356,7 @@ static struct platform_driver tegra_snd_trimslice_driver0 = {
 	.remove = __devexit_p(tegra_snd_trimslice_remove0),
 };
 
-static struct platform_driver tegra_snd_trimslice_driver1 = {
+static struct platform_driver __refdata tegra_snd_trimslice_driver1 = {
 	.driver = {
 		.name = DRV_NAME"-1",
 		.owner = THIS_MODULE,
@@ -365,16 +367,17 @@ static struct platform_driver tegra_snd_trimslice_driver1 = {
 
 static int __init snd_tegra_trimslice_init(void)
 {
-		int ret = 0;
-		ret = platform_driver_register(&tegra_snd_trimslice_driver0);
-		if (ret)
-			return ret;
+	int ret = 0;
 
-		ret = platform_driver_register(&tegra_snd_trimslice_driver1);
-		if (ret)
-			platform_driver_unregister(&tegra_snd_trimslice_driver0);
-
+	ret = platform_driver_register(&tegra_snd_trimslice_driver0);
+	if (ret)
 		return ret;
+
+	ret = platform_driver_register(&tegra_snd_trimslice_driver1);
+	if (ret)
+		platform_driver_unregister(&tegra_snd_trimslice_driver0);
+
+	return ret;
 }
 module_init(snd_tegra_trimslice_init);
 

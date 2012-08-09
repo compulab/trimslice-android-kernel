@@ -39,7 +39,7 @@ config SND_SOC_TEGRA30_I2S
 config SND_SOC_TEGRA20_SPDIF
 	tristate
 	depends on SND_SOC_TEGRA && ARCH_TEGRA_2x_SOC && TEGRA_DC
-	default m
+	default y
 	help
 	  Say Y or M if you want to add support for the TEGRA20 SPDIF interface.
 	  You will also need to select the individual machine drivers to support
