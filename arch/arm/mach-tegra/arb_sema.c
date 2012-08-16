@@ -240,4 +240,4 @@ out:
 }
 subsys_initcall(tegra_arb_init);
 
-MODULE_LICENSE("GPLv2");
+MODULE_LICENSE("GPL v2");
