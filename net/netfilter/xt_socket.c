@@ -265,6 +265,7 @@ extract_icmp6_fields(const struct sk_buff *skb,
 	return 0;
 }
 
+#ifdef CONFIG_IPV6
 struct sock*
 xt_socket_get6_sk(const struct sk_buff *skb, struct xt_action_param *par)
 {
@@ -310,6 +311,7 @@ xt_socket_get6_sk(const struct sk_buff *skb, struct xt_action_param *par)
 	return sk;
 }
 EXPORT_SYMBOL(xt_socket_get6_sk);
+#endif
 
 static bool
 socket_mt6_v1(const struct sk_buff *skb, struct xt_action_param *par)
