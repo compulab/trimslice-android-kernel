@@ -347,7 +347,7 @@ static int __devexit tegra_snd_trimslice_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct platform_driver __refdata tegra_snd_trimslice_driver0 = {
+static struct platform_driver __refdata tegra_snd_trimslice_driver_analog = {
 	.driver = {
 		.name = DRV_NAME"-0",
 		.owner = THIS_MODULE,
@@ -356,7 +356,7 @@ static struct platform_driver __refdata tegra_snd_trimslice_driver0 = {
 	.remove = __devexit_p(tegra_snd_trimslice_remove0),
 };
 
-static struct platform_driver __refdata tegra_snd_trimslice_driver1 = {
+static struct platform_driver __refdata tegra_snd_trimslice_driver_digital = {
 	.driver = {
 		.name = DRV_NAME"-1",
 		.owner = THIS_MODULE,
@@ -365,17 +365,37 @@ static struct platform_driver __refdata tegra_snd_trimslice_driver1 = {
 	.remove = __devexit_p(tegra_snd_trimslice_remove1),
 };
 
+
+/*
+ * 0 is the default sound card. 
+ * By default, analog output is selected. 
+ * May be overriden via 'snd_card=hdmi' bootargs parameter.
+ */
+static struct platform_driver *tegra_snd_trimslice_driver0 = &tegra_snd_trimslice_driver_analog;
+static struct platform_driver *tegra_snd_trimslice_driver1 = &tegra_snd_trimslice_driver_digital;
+
+static int __init setup_default_sound_card(char *options)
+{
+	if (!strcmp(options, "hdmi")) {
+		tegra_snd_trimslice_driver0 = &tegra_snd_trimslice_driver_digital;
+		tegra_snd_trimslice_driver1 = &tegra_snd_trimslice_driver_analog;
+	}
+	return 0;
+}
+__setup("snd_card=", setup_default_sound_card);
+
+
 static int __init snd_tegra_trimslice_init(void)
 {
 	int ret = 0;
 
-	ret = platform_driver_register(&tegra_snd_trimslice_driver0);
+	ret = platform_driver_register(tegra_snd_trimslice_driver0);
 	if (ret)
 		return ret;
 
-	ret = platform_driver_register(&tegra_snd_trimslice_driver1);
+	ret = platform_driver_register(tegra_snd_trimslice_driver1);
 	if (ret)
-		platform_driver_unregister(&tegra_snd_trimslice_driver0);
+		platform_driver_unregister(tegra_snd_trimslice_driver0);
 
 	return ret;
 }
@@ -383,8 +403,8 @@ module_init(snd_tegra_trimslice_init);
 
 static void __exit snd_tegra_trimslice_exit(void)
 {
-	platform_driver_unregister(&tegra_snd_trimslice_driver0);
-	platform_driver_unregister(&tegra_snd_trimslice_driver1);
+	platform_driver_unregister(tegra_snd_trimslice_driver0);
+	platform_driver_unregister(tegra_snd_trimslice_driver1);
 }
 module_exit(snd_tegra_trimslice_exit);
 
