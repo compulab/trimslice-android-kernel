@@ -1693,6 +1693,16 @@ struct request_queue *scsi_alloc_queue(struct scsi_device *sdev)
 	return q;
 }
 
+void scsi_device_tune(struct scsi_device *sdev)
+{
+	struct request_queue *q = sdev->request_queue;
+	if(strncmp(sdev->vendor, "SanDisk" , 5) == 0) {
+		blk_queue_max_hw_sectors(q, 0x20);
+		printk("Vendor [ SanDisk ], max_hw_sectors [ 0x20 ]\n");
+	}
+	return;
+}
+
 void scsi_free_queue(struct request_queue *q)
 {
 	blk_cleanup_queue(q);
