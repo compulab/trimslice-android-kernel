@@ -336,11 +336,12 @@ static int usb_stor_control_thread(void * __us)
 		else {
 			US_DEBUG(usb_stor_show_command(us->srb));
 			if ((us->srb->cmnd[0] == 0x85) &&
-			(le16_to_cpu(us->pusb_dev->descriptor.idVendor)== 0x05e3) &&
-			(le16_to_cpu(us->pusb_dev->descriptor.idProduct)== 0x0718))
-				US_DEBUGP("Skip ATA PASS-THROUGH command\n");
-			else
-				us->proto_handler(us->srb, us);
+				(us->srb->cmnd[6] != ((us->srb->sdb.length >> 9) & 0xFF))) {
+				US_DEBUGP("Fixing ATA PASS-THROUGH command size %d\n",us->srb->transfersize);
+				us->srb->cmnd[6] = ( us->srb->sdb.length >> 9  ) & 0xFF ;
+				us->srb->cmnd[5] = ( us->srb->sdb.length >> 17 ) & 0xFF ;
+		   }
+			us->proto_handler(us->srb, us);
 			usb_mark_last_busy(us->pusb_dev);
 		}
 
