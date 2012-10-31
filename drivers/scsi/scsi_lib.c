@@ -1693,6 +1693,48 @@ struct request_queue *scsi_alloc_queue(struct scsi_device *sdev)
 	return q;
 }
 
+
+/* Some combinations of USB2SATA / SSD are known to fail processing scatter-gather lists.
+ * Currently known workaround is to limit 'max_hw_sectors' parameter to 32. 
+ * Currently known pairs are: 
+ * GL830 : SanDisk	(TrimSlice default)
+ * GL830 : WD500	(customer report)
+ */
+static int max_hw_sectors = 0;
+static int __init setup_max_hw_sectors(char *options)
+{
+     get_option(&options, &max_hw_sectors);
+     return 0;
+}
+__setup("max_hw_sectors=", setup_max_hw_sectors);
+
+void scsi_device_tune(struct scsi_device *sdev)
+{
+	char vendor[9];
+	char model[17];
+	int i;
+	struct request_queue *q = sdev->request_queue;
+
+
+	for (i = 0; i < 8; i++) {
+		vendor[i] = (sdev->vendor[i] >= 0x20) ? sdev->vendor[i] : ' ';
+	}
+	vendor[i] = '\0';
+
+	for (i = 0; i < 16; i++) {
+		model[i] = (sdev->model[i] >= 0x20) ? sdev->model[i] : ' ';
+	}
+	model[i] = '\0';
+
+	printk(KERN_INFO"%s: Vendor: %s  Model: %s \n", __FUNCTION__, vendor, model);
+
+	if ( max_hw_sectors > 0 ) {
+		printk(KERN_INFO"%s: max_hw_sectors <- %d \n", __FUNCTION__, max_hw_sectors);
+		blk_queue_max_hw_sectors(q, 0x20);
+	}
+}
+
+
 void scsi_free_queue(struct request_queue *q)
 {
 	blk_cleanup_queue(q);
