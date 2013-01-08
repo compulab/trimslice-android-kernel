@@ -1119,7 +1119,6 @@ static int scsi_probe_and_add_lun(struct scsi_target *starget,
 			scsi_unlock_floptical(sdev, result);
 		}
 	}
-	scsi_device_tune(sdev);
 
  out_free_result:
 	kfree(result);

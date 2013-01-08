@@ -91,7 +91,6 @@ extern void scsi_exit_queue(void);
 struct request_queue;
 struct request;
 extern struct kmem_cache *scsi_sdb_cache;
-extern void scsi_device_tune(struct scsi_device *sdev);
 
 /* scsi_proc.c */
 #ifdef CONFIG_SCSI_PROC_FS
