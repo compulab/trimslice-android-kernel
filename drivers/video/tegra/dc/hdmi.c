@@ -1004,12 +1004,16 @@ static irqreturn_t tegra_dc_hdmi_irq(int irq, void *ptr)
 	spin_lock_irqsave(&hdmi->suspend_lock, flags);
 	if (!hdmi->suspended) {
 		cancel_delayed_work(&hdmi->work);
-		if (tegra_dc_hdmi_hpd(dc))
+		if (tegra_dc_hdmi_hpd(dc)) {
+			pr_info("HDMI display: attach \n");
 			queue_delayed_work(system_nrt_wq, &hdmi->work,
 					   msecs_to_jiffies(100));
-		else
+		}
+		else {
+			pr_info("HDMI display: detach \n");
 			queue_delayed_work(system_nrt_wq, &hdmi->work,
 					   msecs_to_jiffies(30));
+		}
 	}
 	spin_unlock_irqrestore(&hdmi->suspend_lock, flags);
 
@@ -1470,6 +1474,7 @@ static int tegra_dc_hdmi_setup_audio(struct tegra_dc *dc, unsigned audio_freq,
 int tegra_hdmi_setup_audio_freq_source(unsigned audio_freq, unsigned audio_source)
 {
 	struct tegra_dc_hdmi_data *hdmi = dc_hdmi;
+	int ret = 0;
 
 	if (!hdmi)
 		return -EAGAIN;
@@ -1484,16 +1489,17 @@ int tegra_hdmi_setup_audio_freq_source(unsigned audio_freq, unsigned audio_sourc
 		AUDIO_FREQ_192K== audio_freq) {
 		/* If we can program HDMI, then proceed */
 		if (hdmi->clk_enabled)
-			tegra_dc_hdmi_setup_audio(hdmi->dc, audio_freq,audio_source);
+			ret = tegra_dc_hdmi_setup_audio(hdmi->dc, audio_freq,audio_source);
 
 		/* Store it for using it in enable */
 		hdmi->audio_freq = audio_freq;
 		hdmi->audio_source = audio_source;
 	}
-	else
+	else {
 		return -EINVAL;
+	}
 
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(tegra_hdmi_setup_audio_freq_source);
 
@@ -1822,8 +1828,10 @@ static void tegra_dc_hdmi_enable(struct tegra_dc *dc)
 		err = tegra_dc_hdmi_setup_audio(dc, hdmi->audio_freq,
 			hdmi->audio_source);
 
-		if (err < 0)
+		if (err < 0) {
+			pr_err("%s: could not setup HDMI audio (%d) \n", __FUNCTION__, err);
 			hdmi->dvi = true;
+		}
 	}
 
 #if !defined(CONFIG_ARCH_TEGRA_2x_SOC)
