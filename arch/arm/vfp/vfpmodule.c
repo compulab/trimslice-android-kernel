@@ -573,9 +573,6 @@ static int __init vfp_init(void)
 	unsigned int vfpsid;
 	unsigned int cpu_arch = cpu_architecture();
 
-#ifdef CONFIG_SMP
-	preempt_disable();
-#endif
 	if (cpu_arch >= CPU_ARCH_ARMv6)
 		vfp_enable(NULL);
 
@@ -644,9 +641,6 @@ static int __init vfp_init(void)
 		}
 #endif
 	}
-#ifdef CONFIG_SMP
-	preempt_enable();
-#endif
 	return 0;
 }
 
