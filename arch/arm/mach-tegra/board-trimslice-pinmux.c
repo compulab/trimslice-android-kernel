@@ -154,4 +154,8 @@ void __init trimslice_pinmux_init(void)
 
 	tegra_gpio_enable(TEGRA_GPIO_PP4);
 	gpio_request(TEGRA_GPIO_PP4,"VI_nRESET"); /* i2c_sda fix */
+
+	/* Enable front panel LEDs */
+	tegra_gpio_enable(TEGRA_GPIO_PD2);  /* GEN_LED2 */
+	tegra_gpio_enable(TEGRA_GPIO_PBB5); /* GEN_LED1 */
 }

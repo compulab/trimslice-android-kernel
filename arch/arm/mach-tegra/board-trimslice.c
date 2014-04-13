@@ -438,6 +438,15 @@ static void __init tegra_trimslice_init(void)
 	trimslice_i2c_init();
 	trimslice_panel_init();
 	trimslice_keys_init();
+
+	/* export GPIO LEDs */
+	gpio_request(TEGRA_GPIO_PD2, "right led");
+	gpio_direction_output(TEGRA_GPIO_PD2, 1);
+	gpio_export(TEGRA_GPIO_PD2, false);
+
+	gpio_request(TEGRA_GPIO_PBB5, "left led");
+	gpio_direction_output(TEGRA_GPIO_PBB5, 1);
+	gpio_export(TEGRA_GPIO_PBB5, false);
 }
 
 int __init tegra_trimslice_protected_aperture_init(void)
